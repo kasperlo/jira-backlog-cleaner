@@ -347,6 +347,7 @@ export default function HomePage() {
                 <Button
                   colorScheme="blue"
                   onClick={() => openConfirmationModal(dupGroup, 'merge')}
+                  isLoading={actionInProgress}
                 >
                   Merge Issues
                 </Button>
