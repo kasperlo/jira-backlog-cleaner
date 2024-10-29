@@ -58,33 +58,40 @@ async function getActionSuggestion(issues: JiraIssue[]): Promise<ActionSuggestio
   ).join('\n');
 
   const prompt = `
-You are a project management assistant. Given the following Jira issues that are considered duplicates, analyze the level of detail, clarity, and completeness of their summaries. The possible actions are:
-
-1. Delete one issue (the least descriptive or less clear one), and possibly reformulate the other if it needs to be more descriptive.
-2. Merge into a different type (e.g., convert to a task, subtask, user story, or epic).
-3. Make one issue a subtask of the other.
-4. Other suggestions.
-
-When choosing Action 1, ensure that you recommend deleting the issue with the less descriptive or less clear summary, and keep the one with the more detailed and informative summary. Consider that issue summaries that are just keywords or fragments are less descriptive than those that are complete sentences.
-
-Provide your recommendation by specifying the action number and a brief description of what should be done. Include the specific issue keys that should be deleted, kept, or modified. The response should be in JSON format with the following structure:
-
-{
-  "action": "Action Number",
-  "description": "Detailed description of the recommended action.",
-  "deleteIssueKeys": ["IssueKey1", "IssueKey2"],
-  "keepIssueKeys": ["IssueKey3"],
-  "modifyIssueKeys": ["IssueKey4"]
-}
-
-Only include the keys relevant to the action.
-
-Here are the issues:
-
-${issueSummaries}
-
-Ensure the JSON is the only output.
-`;
+  You are a project management assistant. Given the following Jira issues that are being considered for consolidation, analyze the level of detail, clarity, and completeness of their summaries. Use the following guidelines and action options:
+  
+  ### Hierarchy Rules:
+  - Epics can have Tasks, Stories, and Bugs as child issues.
+  - Tasks, Stories, and Bugs can have Sub-tasks as child issues.
+  - Sub-tasks cannot have child issues.
+  
+  ### Possible Actions:
+  1. **Delete**: Delete the least descriptive or less clear issue if it's redundant, and keep the one with more detail and clarity.
+  2. **Convert to Sub-task**: If one issue is more specific than the other and can be considered part of it, convert the specific issue into a subtask of the broader issue (e.g., convert a Task into a Sub-task under a Story).
+  3. **Other Suggestions**: If neither of the above actions applies, suggest other ways to improve the backlog organization, like splitting or consolidating related issues.
+  
+  When choosing an action:
+  - Use **Action 1** to delete an issue only if it’s fully redundant.
+  - Use **Action 2** if an issue could logically be a subtask of another according to the hierarchy rules. For example, a Task that describes a detailed part of a Story should be converted to a Sub-task of that Story.
+  - Only use **Action 3** if no clear subtask relationship can be established but some other restructuring is suggested.
+  
+  Provide your recommendation in JSON format using the structure below. Include only the keys relevant to the action.
+  
+  {
+    "action": "Action Number",
+    "description": "Detailed description of the recommended action.",
+    "deleteIssueKeys": ["IssueKey1"],
+    "keepIssueKeys": ["IssueKey2"],
+    "modifyIssueKeys": ["IssueKey3"]
+  }
+  
+  Here are the issues:
+  
+  ${issueSummaries}
+  
+  Ensure the JSON is the only output.
+  `;
+  
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4',

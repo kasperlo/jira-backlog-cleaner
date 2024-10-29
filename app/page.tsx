@@ -20,8 +20,14 @@ import {
   ModalHeader,
   ModalBody,
   ModalFooter,
+  Textarea,
   useDisclosure,
+  VStack,
+  HStack,
+  useToast,
+  Divider,
 } from '@chakra-ui/react';
+import axios from 'axios';
 
 interface JiraIssue {
   id: string;
@@ -33,7 +39,9 @@ interface JiraIssue {
     };
     created: string;
     description?: string;
-    // Add other fields as needed
+    parent?: {
+      key: string;
+    };
   };
 }
 
@@ -50,54 +58,112 @@ interface ActionSuggestion {
   modifyIssueKeys: string[];
 }
 
+interface Suggestion {
+  summary: string;
+  description: string;
+  issuetype: string;
+}
+
 export default function HomePage() {
   const [issues, setIssues] = useState<JiraIssue[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string>('');
   const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [duplicateLoading, setDuplicateLoading] = useState<boolean>(false);
   const [detecting, setDetecting] = useState<boolean>(false);
-  const [actionInProgress, setActionInProgress] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [duplicateError, setDuplicateError] = useState<string>('');
   const [selectedGroup, setSelectedGroup] = useState<DuplicateGroup | null>(null);
   const [actionType, setActionType] = useState<'merge' | 'notDuplicate' | 'ignore' | null>(null);
   const [suggestion, setSuggestion] = useState<ActionSuggestion | null>(null);
+  const [subtasks, setSubtasks] = useState<JiraIssue[] | null>(null);
+  const [deleteAction, setDeleteAction] = useState<'delete' | 'convert' | null>(null);
+  const [actionInProgress, setActionInProgress] = useState<boolean>(false);
+  const [projectDescription, setProjectDescription] = useState<string>('');
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggesting, setSuggesting] = useState<boolean>(false);
 
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const toast = useToast();
 
   const fetchIssues = async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/issues');
-      const data = await response.json();
-      if (response.ok) {
-        setIssues(data.issues);
-      } else {
-        setError(data.error || 'Failed to fetch issues.');
-      }
+      const response = await axios.get('/api/issues');
+      setIssues(response.data.issues);
+      setDuplicates([]);
+      toast({
+        title: 'Issues fetched successfully.',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
     } catch (err) {
       console.error('Error fetching issues:', err);
-      setError('An error occurred while fetching issues.');
+      setError('Failed to fetch Jira issues.');
+      toast({
+        title: 'Error fetching issues.',
+        description: 'Please try again later.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const detectDuplicates = async () => {
-    setDetecting(true);
-    setError('');
+    setDuplicateLoading(true);
+    setDuplicateError('');
     try {
-      const response = await fetch('/api/detect-duplicates');
-      const data = await response.json();
-      if (response.ok) {
-        setDuplicates(data.duplicates);
-      } else {
-        setError(data.error || 'Failed to detect duplicates.');
-      }
+      const response = await axios.post('/api/detect-duplicates', { issues });
+      setDuplicates(response.data.duplicates);
+      toast({
+        title: 'Duplicate detection completed.',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
     } catch (err) {
       console.error('Error detecting duplicates:', err);
-      setError('An error occurred while detecting duplicates.');
+      setDuplicateError('Failed to detect duplicates: ' + err);
+      toast({
+        title: 'Error detecting duplicates.',
+        description: 'Please try again later.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
     } finally {
-      setDetecting(false);
+      setDuplicateLoading(false);
+    }
+  };
+
+  const suggestNewIssues = async () => {
+    setSuggesting(true);
+    setError('');
+    try {
+      const response = await axios.post('/api/suggest-new-issues', {
+        projectDescription,
+      });
+      setSuggestions(response.data.suggestions);
+    } catch (err) {
+      console.error('Error suggesting new issues:', err);
+      setError('Failed to suggest new issues.');
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const createIssueInJira = async (suggestion: Suggestion) => {
+    try {
+      const response = await axios.post('/api/create-issue', { suggestion });
+      alert(`Issue ${response.data.issueKey} created successfully.`);
+      fetchIssues();
+    } catch (err) {
+      console.error('Error creating issue:', err);
+      alert('Failed to create issue.');
     }
   };
 
@@ -149,22 +215,15 @@ export default function HomePage() {
 
     if (type === 'merge') {
       try {
-        const response = await fetch('/api/suggest-action', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ issues: group.group }),
+        const response = await axios.post('/api/suggest-action', {
+          issues: group.group,
         });
-        const data = await response.json();
-        if (response.ok) {
-          // Ensure arrays are initialized
-          data.suggestion.deleteIssueKeys = data.suggestion.deleteIssueKeys || [];
-          data.suggestion.keepIssueKeys = data.suggestion.keepIssueKeys || [];
-          data.suggestion.modifyIssueKeys = data.suggestion.modifyIssueKeys || [];
-          setSuggestion(data.suggestion);
-        } else {
-          setSuggestion(null);
-          alert(`Error: ${data.error}`);
-        }
+        const data = response.data;
+        // Ensure arrays are initialized
+        data.suggestion.deleteIssueKeys = data.suggestion.deleteIssueKeys || [];
+        data.suggestion.keepIssueKeys = data.suggestion.keepIssueKeys || [];
+        data.suggestion.modifyIssueKeys = data.suggestion.modifyIssueKeys || [];
+        setSuggestion(data.suggestion);
       } catch (error) {
         console.error('Error getting action suggestion:', error);
         setSuggestion(null);
@@ -177,13 +236,34 @@ export default function HomePage() {
     onOpen();
   };
 
+  const handleDeleteIssueResponse = async (issueKey: string) => {
+    try {
+      const deleteResponse = await axios.post('/api/delete-issue', { issueKey });
+      const deleteData = deleteResponse.data;
+
+      if (deleteResponse.status === 200) {
+        // Issue deleted successfully
+        alert(`Issue ${issueKey} deleted successfully.`);
+      } else if (deleteData.subtasks) {
+        // Issue has subtasks, prompt the user
+        setSubtasks(deleteData.subtasks);
+        // Open a modal to show subtasks and ask for user decision
+        onOpen();
+      } else {
+        throw new Error(deleteData.error || `Failed to delete issue ${issueKey}.`);
+      }
+    } catch (error) {
+      console.error('Error deleting issue:', error);
+      alert('An error occurred while deleting the issue.');
+    }
+  };
+
   const performDeleteAndUpdate = async () => {
     if (!suggestion) return;
 
     const issueKeysToDelete = suggestion.deleteIssueKeys;
     const issueKeysToModify = suggestion.modifyIssueKeys;
 
-    // Confirm with the user
     const confirmDelete = window.confirm(
       `Are you sure you want to delete issue(s) ${issueKeysToDelete.join(', ')}${issueKeysToModify.length > 0
         ? ` and possibly update issue(s) ${issueKeysToModify.join(', ')}`
@@ -192,28 +272,37 @@ export default function HomePage() {
     );
     if (!confirmDelete) return;
 
-    // Delete issues
     for (const issueKey of issueKeysToDelete) {
-      const deleteResponse = await fetch('/api/delete-issue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ issueKey }),
-      });
-      const deleteData = await deleteResponse.json();
-      if (!deleteResponse.ok) {
-        throw new Error(deleteData.error || `Failed to delete issue ${issueKey}.`);
-      }
+      await handleDeleteIssueResponse(issueKey);
     }
 
-    // Optionally update issues
-    // Implement logic to update issues if necessary
-
     alert(
-      `Issue(s) ${issueKeysToDelete.join(', ')} have been deleted.${issueKeysToModify.length > 0
+      `Issue(s) ${issueKeysToDelete.join(', ')} have been processed.${issueKeysToModify.length > 0
         ? ` Issue(s) ${issueKeysToModify.join(', ')} may need to be updated.`
         : ''
       }`
     );
+  };
+
+  const handleSubtaskAction = async (issueKey: string, action: 'delete' | 'convert') => {
+    setActionInProgress(true);
+    try {
+      const response = await axios.post('/api/delete-issue', { issueKey, action });
+      const data = response.data;
+      if (response.status === 200) {
+        alert(data.message);
+      } else {
+        throw new Error(data.error || 'Failed to perform the action.');
+      }
+    } catch (error) {
+      console.error('Error handling subtask action:', error);
+      alert('An error occurred while performing the action.');
+    } finally {
+      setActionInProgress(false);
+      setSubtasks(null);
+      setDeleteAction(null);
+      onClose();
+    }
   };
 
   const performChangeIssueType = async () => {
@@ -229,64 +318,71 @@ export default function HomePage() {
     const newIssueType = 'Task'; // Modify as needed or get from user input
 
     for (const issueKey of issueKeysToModify) {
-      const updateResponse = await fetch('/api/update-issue-type', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ issueKey, newIssueType }),
+      const updateResponse = await axios.post('/api/update-issue-type', {
+        issueKey,
+        newIssueType,
       });
-      const updateData = await updateResponse.json();
-      if (!updateResponse.ok) {
+      const updateData = updateResponse.data;
+      if (updateResponse.status !== 200) {
         throw new Error(updateData.error || `Failed to update issue type for ${issueKey}.`);
       }
     }
 
-    alert(
-      `Issue(s) ${issueKeysToModify.join(', ')} have been changed to type ${newIssueType}.`
-    );
+    alert(`Issue(s) ${issueKeysToModify.join(', ')} have been changed to type ${newIssueType}.`);
   };
 
   const performMakeSubtask = async () => {
     if (!suggestion) return;
 
-    const parentIssueKey = suggestion.keepIssueKeys[0];
-    const subtaskIssueKeys = suggestion.modifyIssueKeys;
+    const issueKeysToModify = suggestion.modifyIssueKeys;
 
-    if (!parentIssueKey || subtaskIssueKeys.length === 0) {
-      alert('No parent or subtask issues specified.');
+    if (issueKeysToModify.length === 0) {
+      alert('No issues specified to change.');
       return;
     }
 
-    for (const subtaskIssueKey of subtaskIssueKeys) {
-      const makeSubtaskResponse = await fetch('/api/make-subtask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          parentIssueKey,
-          subtaskIssueKey,
-        }),
-      });
-      const makeSubtaskData = await makeSubtaskResponse.json();
-      if (!makeSubtaskResponse.ok) {
-        throw new Error(
-          makeSubtaskData.error || `Failed to make ${subtaskIssueKey} a subtask of ${parentIssueKey}.`
-        );
-      }
-    }
+    // Prepare the epic suggestion
+    const epicSuggestion = {
+      summary: 'Improve backlog management',
+      description: 'This epic groups the following issues: ' + issueKeysToModify.join(', '),
+      issuetype: 'Epic',
+    };
 
-    alert(
-      `Issue(s) ${subtaskIssueKeys.join(', ')} are now subtasks of issue ${parentIssueKey}.`
-    );
+    // Step 1: Create the new Epic
+    try {
+      const response = await axios.post('/api/create-issue', {
+        suggestion: epicSuggestion,
+        isEpic: true, // Specify that this is an Epic
+      });
+
+      const epicKey = response.data.issueKey;
+
+      // Step 2: Link issues to the Epic
+      for (const issueKey of issueKeysToModify) {
+        try {
+          await axios.post('/api/link-issue-to-epic', {
+            issueKey,
+            epicKey,
+          });
+        } catch (error) {
+          console.error(error);
+          alert(`An error occurred while linking issue ${issueKey} to Epic.`);
+          return;
+        }
+      }
+
+      alert(`Issues ${issueKeysToModify.join(', ')} have been linked to Epic ${epicKey}.`);
+    } catch (error) {
+      alert('Failed to create Epic.');
+    }
   };
+
 
   const linkIssuesAsDuplicates = async (issuesToLink: JiraIssue[]) => {
     const issueKeys = issuesToLink.map((issue) => issue.key);
-    const response = await fetch('/api/link-issues', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ issueKeys }),
-    });
-    const data = await response.json();
-    if (response.ok) {
+    const response = await axios.post('/api/link-issues', { issueKeys });
+    const data = response.data;
+    if (response.status === 200) {
       alert(`Issues ${issueKeys.join(', ')} have been linked as duplicates.`);
     } else {
       throw new Error(data.error || 'Failed to link issues.');
@@ -297,36 +393,71 @@ export default function HomePage() {
     fetchIssues();
   }, []);
 
-  if (loading) {
-    return (
-      <Box p={4} textAlign="center">
-        <Spinner size="xl" />
-        <Text mt={4}>Loading issues...</Text>
-      </Box>
-    );
-  }
-
   return (
     <Box p={4}>
-      <Heading mb={4}>Jira Issues</Heading>
-      <Button mb={4} onClick={fetchIssues} isDisabled={loading || detecting}>
-        Refresh Issues
-      </Button>
-      <Button
-        mb={4}
-        ml={2}
-        onClick={detectDuplicates}
-        isLoading={detecting}
-        isDisabled={loading}
-      >
-        Detect Duplicates
-      </Button>
+      <Heading mb={4}>Jira Backlog Manager</Heading>
+
+      {/* Suggest New Issues Section */}
+      <Box mb={6}>
+        <Heading size="md" mb={2}>
+          Suggest New Issues
+        </Heading>
+        <Textarea
+          placeholder="Enter project description..."
+          value={projectDescription}
+          onChange={(e) => setProjectDescription(e.target.value)}
+          mb={2}
+        />
+        <Button onClick={suggestNewIssues} isLoading={suggesting}>
+          Suggest New Issues
+        </Button>
+      </Box>
+
+      {suggestions.length > 0 && (
+        <Box mb={6}>
+          <Heading size="md">Suggested New Issues</Heading>
+          <List spacing={3} mt={2}>
+            {suggestions.map((suggestion, index) => (
+              <ListItem key={index} borderWidth="1px" borderRadius="md" p={4}>
+                <Text fontWeight="bold">{suggestion.summary}</Text>
+                <Text>{suggestion.description}</Text>
+                <Text fontSize="sm" color="gray.500">
+                  Type: {suggestion.issuetype}
+                </Text>
+                <Button
+                  mt={2}
+                  colorScheme="green"
+                  onClick={() => createIssueInJira(suggestion)}
+                >
+                  Create Issue
+                </Button>
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      )}
+
+      <HStack spacing={4} justify="center">
+        <Button colorScheme="teal" onClick={fetchIssues} isLoading={loading || detecting}>
+          Refresh Issues
+        </Button>
+        <Button
+          colorScheme="blue"
+          onClick={detectDuplicates}
+          isLoading={duplicateLoading}
+          disabled={issues.length === 0}
+        >
+          Detect Duplicates
+        </Button>
+      </HStack>
+
       {error && (
         <Alert status="error" mb={4}>
           <AlertIcon />
           {error}
         </Alert>
       )}
+
       {duplicates.length > 0 && (
         <Box mb={4}>
           <Heading size="md">Potential Duplicates</Heading>
@@ -354,10 +485,7 @@ export default function HomePage() {
                 <Button onClick={() => openConfirmationModal(dupGroup, 'notDuplicate')}>
                   Not Duplicates
                 </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => openConfirmationModal(dupGroup, 'ignore')}
-                >
+                <Button variant="ghost" onClick={() => openConfirmationModal(dupGroup, 'ignore')}>
                   Ignore
                 </Button>
               </ButtonGroup>
@@ -365,6 +493,7 @@ export default function HomePage() {
           ))}
         </Box>
       )}
+
       <Heading size="md" mt={6}>
         All Issues
       </Heading>
@@ -381,17 +510,63 @@ export default function HomePage() {
                 Type: {issue.fields.issuetype.name} | Created:{' '}
                 {new Date(issue.fields.created).toLocaleDateString()}
               </Text>
+              <Button
+                mt={2}
+                colorScheme="red"
+                onClick={() => handleDeleteIssueResponse(issue.key)}
+                isLoading={actionInProgress}
+              >
+                Delete Issue
+              </Button>
             </ListItem>
           ))}
         </List>
       )}
+
       {/* Confirmation Modal */}
       <Modal isOpen={isOpen} onClose={onClose} size="lg">
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>Confirm Action</ModalHeader>
           <ModalBody>
-            {actionType === 'merge' && selectedGroup && (
+            {subtasks && subtasks.length > 0 ? (
+              // Modal content for subtasks handling
+              <Box>
+                <Text mb={4}>
+                  The issue has the following subtasks. Do you wish to delete them as well or
+                  convert them into separate tasks?
+                </Text>
+                <List spacing={2} mb={4}>
+                  {subtasks.map((subtask) => (
+                    <ListItem key={subtask.id}>
+                      {subtask.key}: {subtask.fields.summary}
+                    </ListItem>
+                  ))}
+                </List>
+                <ButtonGroup mt={4}>
+                  <Button
+                    colorScheme="red"
+                    onClick={() => {
+                      setDeleteAction('delete');
+                      handleSubtaskAction(subtasks[0].fields.parent?.key || '', 'delete');
+                    }}
+                    isLoading={actionInProgress}
+                  >
+                    Delete Subtasks
+                  </Button>
+                  <Button
+                    colorScheme="blue"
+                    onClick={() => {
+                      setDeleteAction('convert');
+                      handleSubtaskAction(subtasks[0].fields.parent?.key || '', 'convert');
+                    }}
+                    isLoading={actionInProgress}
+                  >
+                    Convert to Tasks
+                  </Button>
+                </ButtonGroup>
+              </Box>
+            ) : actionType === 'merge' && selectedGroup ? (
               <Box>
                 <Text mb={4}>You have selected to merge the following issues:</Text>
                 <List spacing={2} mb={4}>
@@ -410,39 +585,33 @@ export default function HomePage() {
                     {/* Display detailed information based on GPT-4's explicit issue keys */}
                     {suggestion.deleteIssueKeys.length > 0 && (
                       <Text>
-                        Issue(s) to be <strong>deleted</strong>:{' '}
-                        {suggestion.deleteIssueKeys.join(', ')}
+                        Issue(s) to be <strong>deleted</strong>: {suggestion.deleteIssueKeys.join(', ')}
                       </Text>
                     )}
                     {suggestion.keepIssueKeys.length > 0 && (
                       <Text>
-                        Issue(s) to be <strong>kept</strong>:{' '}
-                        {suggestion.keepIssueKeys.join(', ')}
+                        Issue(s) to be <strong>kept</strong>: {suggestion.keepIssueKeys.join(', ')}
                       </Text>
                     )}
                     {suggestion.modifyIssueKeys.length > 0 && (
                       <Text>
-                        Issue(s) to be <strong>modified</strong>:{' '}
-                        {suggestion.modifyIssueKeys.join(', ')}
+                        Issue(s) to be <strong>modified</strong>: {suggestion.modifyIssueKeys.join(', ')}
                       </Text>
                     )}
                     <Text mt={4}>
-                      You can proceed with this recommendation or choose to just mark
-                      the issues as duplicates.
+                      You can proceed with this recommendation or choose to just mark the issues as duplicates.
                     </Text>
                   </Box>
                 ) : (
                   <Text>
-                    Unable to retrieve recommendation. You can proceed to mark the
-                    issues as duplicates.
+                    Unable to retrieve recommendation. You can proceed to mark the issues as duplicates.
                   </Text>
                 )}
                 <Text mt={4} fontWeight="bold">
                   Do you wish to proceed?
                 </Text>
               </Box>
-            )}
-            {(actionType === 'notDuplicate' || actionType === 'ignore') && selectedGroup && (
+            ) : (actionType === 'notDuplicate' || actionType === 'ignore') && selectedGroup ? (
               <Box>
                 <Text mb={4}>
                   You are about to{' '}
@@ -459,20 +628,26 @@ export default function HomePage() {
                   ))}
                 </List>
                 <Text>
-                  This will remove the duplicate suggestion from the list. No changes will
-                  be made to the issues in Jira.
+                  This will remove the duplicate suggestion from the list. No changes will be made to the issues in Jira.
                 </Text>
                 <Text mt={4} fontWeight="bold">
                   Do you wish to proceed?
                 </Text>
               </Box>
-            )}
+            ) : null}
           </ModalBody>
           <ModalFooter>
-            <Button variant="ghost" onClick={onClose} mr={3}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setSubtasks(null);
+                onClose();
+              }}
+              mr={3}
+            >
               Cancel
             </Button>
-            {actionType === 'merge' && suggestion && (
+            {subtasks && subtasks.length > 0 ? null : actionType === 'merge' && suggestion ? (
               <ButtonGroup>
                 <Button
                   colorScheme="green"
@@ -489,8 +664,7 @@ export default function HomePage() {
                   Mark as Duplicates
                 </Button>
               </ButtonGroup>
-            )}
-            {actionType === 'merge' && !suggestion && (
+            ) : actionType === 'merge' && !suggestion ? (
               <Button
                 colorScheme="blue"
                 onClick={() => handleAction('markAsDuplicate')}
@@ -498,8 +672,7 @@ export default function HomePage() {
               >
                 Mark as Duplicates
               </Button>
-            )}
-            {(actionType === 'notDuplicate' || actionType === 'ignore') && (
+            ) : actionType === 'notDuplicate' || actionType === 'ignore' ? (
               <Button
                 colorScheme="blue"
                 onClick={() => handleAction()}
@@ -507,7 +680,7 @@ export default function HomePage() {
               >
                 Confirm
               </Button>
-            )}
+            ) : null}
           </ModalFooter>
         </ModalContent>
       </Modal>

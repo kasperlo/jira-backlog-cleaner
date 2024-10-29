@@ -1,29 +1,43 @@
-// pages/api/detect-duplicates.ts
-
 import type { NextApiRequest, NextApiResponse } from 'next';
 import jira from '../../lib/jiraClient';
-import openai from '../../lib/openaiClient';
+import pinecone from '../../lib/pineconeClient';
+import { Index } from '@pinecone-database/pinecone';
 
 interface JiraIssue {
   id: string;
   key: string;
   fields: {
     summary: string;
+    description?: string;
     issuetype: {
       name: string;
     };
     parent?: {
       key: string;
     };
-    // Add other fields as needed
   };
 }
-
 
 interface DuplicateGroup {
   group: JiraIssue[];
   explanation: string;
 }
+
+interface FetchResponse {
+  records: {
+    [id: string]: {
+      id: string;
+      values: number[];
+      sparseValues?: any;
+      metadata?: Record<string, any>;
+    };
+  };
+  namespace?: string;
+  usage?: {
+    readUnits?: number;
+  };
+}
+
 
 export default async function handler(
   req: NextApiRequest,
@@ -31,19 +45,14 @@ export default async function handler(
 ) {
   try {
     // Fetch issues from Jira
-    const jql = 'project = "BG" AND status = "To Do"';
+    const jql = 'project = "BG"';
     const response = await jira.searchJira(jql, {
-      fields: ['summary', 'issuetype', 'parent'],
-    });    const issues: JiraIssue[] = response.issues;
-
-    // Prepare data for OpenAI
-    const summaries = issues.map((issue) => {
-      const parentKey = issue.fields.parent?.key || 'None';
-      return `${issue.key} (Parent: ${parentKey}) - ${issue.fields.summary}`;
+      fields: ['summary', 'description', 'issuetype', 'parent'],
     });
-    
-    // Call OpenAI API to detect duplicates
-    const duplicates = await detectDuplicatesWithOpenAI(summaries, issues);
+    const issues: JiraIssue[] = response.issues;
+
+    // Detect duplicates using Pinecone
+    const duplicates = await detectDuplicatesWithPinecone(issues);
 
     res.status(200).json({ duplicates });
   } catch (error: any) {
@@ -55,83 +64,68 @@ export default async function handler(
   }
 }
 
-async function detectDuplicatesWithOpenAI(
-  summaries: string[],
-  issues: JiraIssue[]
-): Promise<DuplicateGroup[]> {
-  const prompt = `
-You are an assistant that identifies duplicate tasks in a list.
+async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise<DuplicateGroup[]> {
+  const index = pinecone.Index('masterz'); // Use your index name
 
-Here is a list of tasks:
-${summaries.join('\n')}
+  const duplicateGroups: DuplicateGroup[] = [];
+  const processedIssues = new Set<string>();
+  const SIMILARITY_THRESHOLD = 0.9; // Adjust based on your needs
 
-Important Notes:
-- Consider tasks as duplicates if they have the same intent or objectives, even if they are phrased differently or use synonyms.
-- Pay special attention to tasks that are paraphrased but mean the same thing.
-- Do NOT consider tasks as duplicates if they are subtasks of the same parent issue.
-- Do NOT consider tasks as duplicates if they are the same issue (i.e., have the same issue key).
+  for (const issue of issues) {
+    if (processedIssues.has(issue.key)) continue;
 
-Group the tasks that are duplicates (i.e., they describe the same or very similar work) and provide the groups as an array of objects in valid JSON format, where each object contains:
-- "group": an array of issue keys of the duplicate tasks (e.g., ["ISSUE-1", "ISSUE-3"]).
-- "explanation": a one-sentence explanation of why these tasks are duplicates.
+    // Fetch the issue's embedding
+    const fetchResponse = (await index.fetch([issue.key])) as FetchResponse;
+    console.log('fetchResponse:', fetchResponse);
 
-Only include groups with more than one task.
+    const vector = fetchResponse.records[issue.key]; // Access 'records' instead of 'vectors'
 
-Ensure the JSON is the only output.
+    if (!vector) {
+      console.error(`Embedding not found for issue ${issue.key}`);
+      continue;
+    }
 
-Example Output:
-[
-  {
-    "group": ["BG-1", "BG-3"],
-    "explanation": "Both tasks involve testing and validating the backlog grooming tool to meet project managers' needs."
+    const embedding = vector.values;
+
+    // Perform similarity search
+    const queryResponse = await index.query({
+      vector: embedding,
+      topK: 10, // Number of similar issues to retrieve
+      includeMetadata: true,
+      includeValues: false,
+    });
+
+    const similarIssues = queryResponse.matches
+      .filter(
+        (match) =>
+          match.id !== issue.key && match.score !== undefined && match.score >= SIMILARITY_THRESHOLD
+      )
+      .map((match) => ({
+        key: match.id,
+        score: match.score!,
+      }));
+
+    if (similarIssues.length > 0) {
+      const groupIssues = [issue];
+
+      for (const simIssue of similarIssues) {
+        const matchedIssue = issues.find((i) => i.key === simIssue.key);
+        if (matchedIssue && !processedIssues.has(matchedIssue.key)) {
+          groupIssues.push(matchedIssue);
+          processedIssues.add(matchedIssue.key);
+        }
+      }
+
+      duplicateGroups.push({
+        group: groupIssues,
+        explanation: `Issues are duplicates based on a similarity score above ${SIMILARITY_THRESHOLD}.`,
+      });
+
+      groupIssues.forEach((i) => processedIssues.add(i.key));
+    } else {
+      processedIssues.add(issue.key);
+    }
   }
-]
-`;
-
-
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4',
-    messages: [{ role: 'user', content: prompt }],
-    max_tokens: 500,
-    temperature: 0,
-  });
-
-  const text = response.choices[0]?.message?.content?.trim();
-
-  if (!text) {
-    throw new Error('No response from OpenAI');
-  }
-
-  // Extract JSON from the response
-  let jsonText = text;
-  const match = text.match(/\[.*\]/s);
-  if (match) {
-    jsonText = match[0];
-  }
-
-  // Create a map of issue keys to issues
-  const issueMap = new Map<string, JiraIssue>();
-  issues.forEach((issue) => {
-    issueMap.set(issue.key, issue);
-  });
-
-  // Parse the response
-  let duplicateGroupsRaw: { group: string[]; explanation: string }[] = [];
-  try {
-    duplicateGroupsRaw = JSON.parse(jsonText);
-  } catch (err) {
-    console.error('Error parsing OpenAI response:', err);
-    throw new Error('Failed to parse OpenAI response');
-  }
-
-  // Map issue keys to issues and form DuplicateGroup[]
-  const duplicateGroups: DuplicateGroup[] = duplicateGroupsRaw.map((item) => ({
-    group: item.group
-      .map((key) => issueMap.get(key))
-      .filter((issue): issue is JiraIssue => issue !== undefined),
-    explanation: item.explanation,
-  }));
 
   return duplicateGroups;
 }
-
