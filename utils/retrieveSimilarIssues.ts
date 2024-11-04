@@ -18,7 +18,7 @@ interface JiraIssue {
 }
 
 export async function retrieveSimilarIssues(queryEmbedding: number[], topK: number = 5): Promise<JiraIssue[]> {
-  const index = pinecone.index('masterz');
+  const index = pinecone.index('masterz-3072'); // Updated index name
 
   const queryResponse = await index.query({
     vector: queryEmbedding,

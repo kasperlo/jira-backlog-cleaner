@@ -1,7 +1,7 @@
 // pages/api/update-issue-type.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import jira from '../../lib/jiraClient';
+import { createJiraClient, JiraConfig } from '../../lib/jiraClient';
 
 export default async function handler(
   req: NextApiRequest,
@@ -9,20 +9,27 @@ export default async function handler(
 ) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
-    res.status(405).end('Method Not Allowed');
-    return;
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { issueKey, newIssueType } = req.body;
+  const { issueKey, newIssueType, config } = req.body;
 
-  if (!issueKey || !newIssueType) {
-    res.status(400).json({ error: 'Issue key and new issue type are required.' });
-    return;
+  if (!issueKey || !newIssueType || !config) {
+    return res.status(400).json({ error: 'Issue key, new issue type, and Jira config are required.' });
   }
+
+  // Validate JiraConfig structure (optional but recommended)
+  const { jiraEmail, jiraApiToken, jiraBaseUrl, projectKey } = config as JiraConfig;
+  if (!jiraEmail || !jiraApiToken || !jiraBaseUrl || !projectKey) {
+    return res.status(400).json({ error: 'Incomplete Jira configuration.' });
+  }
+
+  // Instantiate JiraClient with the provided config
+  const jiraClient = createJiraClient(config as JiraConfig);
 
   try {
     // Update the issue type
-    await jira.updateIssue(issueKey, {
+    await jiraClient.updateIssue(issueKey, {
       fields: {
         issuetype: {
           name: newIssueType,

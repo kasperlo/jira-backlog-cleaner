@@ -1,27 +1,9 @@
+// pages/api/detect-duplicates.ts
+
 import type { NextApiRequest, NextApiResponse } from 'next';
-import jira from '../../lib/jiraClient';
-import pinecone from '../../lib/pineconeClient';
-import { Index } from '@pinecone-database/pinecone';
-
-interface JiraIssue {
-  id: string;
-  key: string;
-  fields: {
-    summary: string;
-    description?: string;
-    issuetype: {
-      name: string;
-    };
-    parent?: {
-      key: string;
-    };
-  };
-}
-
-interface DuplicateGroup {
-  group: JiraIssue[];
-  explanation: string;
-}
+import pinecone from '../../lib/pineconeClient'; // Ensure correct import path
+import { JiraIssue, DuplicateGroup } from '../../types/types'; // Ensure correct import path
+import { createJiraClient, JiraConfig } from '../../lib/jiraClient';
 
 interface FetchResponse {
   records: {
@@ -38,47 +20,28 @@ interface FetchResponse {
   };
 }
 
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  try {
-    // Fetch issues from Jira
-    const jql = 'project = "BG"';
-    const response = await jira.searchJira(jql, {
-      fields: ['summary', 'description', 'issuetype', 'parent'],
-    });
-    const issues: JiraIssue[] = response.issues;
-
-    // Detect duplicates using Pinecone
-    const duplicates = await detectDuplicatesWithPinecone(issues);
-
-    res.status(200).json({ duplicates });
-  } catch (error: any) {
-    console.error('Error detecting duplicates:', error);
-    res.status(500).json({
-      error:
-        error.response?.data?.errorMessages?.[0] || 'Failed to detect duplicates',
-    });
-  }
-}
-
-async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise<DuplicateGroup[]> {
-  const index = pinecone.Index('masterz'); // Use your index name
-
+/**
+ * Detects duplicate pairs using Pinecone similarity search.
+ * @param issues - Array of Jira issues to analyze.
+ * @param config - Jira configuration details.
+ * @returns Array of DuplicateGroup containing only pairs.
+ */
+export async function detectDuplicatesWithPinecone(issues: JiraIssue[], config: JiraConfig): Promise<DuplicateGroup[]> {
+  const index = pinecone.Index('masterz-3072'); // Updated index name
   const duplicateGroups: DuplicateGroup[] = [];
   const processedIssues = new Set<string>();
-  const SIMILARITY_THRESHOLD = 0.9; // Adjust based on your needs
+  const SIMILARITY_THRESHOLD = parseFloat(process.env.SIMILARITY_THRESHOLD || '0.75'); // Dynamic threshold
+
+  // Instantiate JiraClient if needed (not used in current function)
+  const jiraClient = createJiraClient(config);
 
   for (const issue of issues) {
     if (processedIssues.has(issue.key)) continue;
 
-    // Fetch the issue's embedding
+    // Fetch the issue's embedding from Pinecone
     const fetchResponse = (await index.fetch([issue.key])) as FetchResponse;
-    console.log('fetchResponse:', fetchResponse);
 
-    const vector = fetchResponse.records[issue.key]; // Access 'records' instead of 'vectors'
+    const vector = fetchResponse.records[issue.key];
 
     if (!vector) {
       console.error(`Embedding not found for issue ${issue.key}`);
@@ -90,7 +53,7 @@ async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise<Duplic
     // Perform similarity search
     const queryResponse = await index.query({
       vector: embedding,
-      topK: 10, // Number of similar issues to retrieve
+      topK: 2, // Retrieve the most similar issue (including itself)
       includeMetadata: true,
       includeValues: false,
     });
@@ -100,32 +63,62 @@ async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise<Duplic
         (match) =>
           match.id !== issue.key && match.score !== undefined && match.score >= SIMILARITY_THRESHOLD
       )
-      .map((match) => ({
-        key: match.id,
-        score: match.score!,
-      }));
+      .sort((a, b) => (b.score! - a.score!)); // Use non-null assertion
 
     if (similarIssues.length > 0) {
-      const groupIssues = [issue];
+      const bestMatch = similarIssues[0];
+      const matchedIssueKey = bestMatch.id;
 
-      for (const simIssue of similarIssues) {
-        const matchedIssue = issues.find((i) => i.key === simIssue.key);
-        if (matchedIssue && !processedIssues.has(matchedIssue.key)) {
-          groupIssues.push(matchedIssue);
-          processedIssues.add(matchedIssue.key);
-        }
+      // Check if the matched issue is already processed
+      if (processedIssues.has(matchedIssueKey)) {
+        continue; // Skip if already processed
       }
 
-      duplicateGroups.push({
-        group: groupIssues,
-        explanation: `Issues are duplicates based on a similarity score above ${SIMILARITY_THRESHOLD}.`,
-      });
+      // Find the matched issue details
+      const matchedIssue = issues.find((i) => i.key === matchedIssueKey);
 
-      groupIssues.forEach((i) => processedIssues.add(i.key));
-    } else {
-      processedIssues.add(issue.key);
+      if (matchedIssue) {
+        // Create a duplicate group with the pair
+        duplicateGroups.push({
+          group: [issue, matchedIssue],
+          explanation: `Issues '${issue.key}' and '${matchedIssue.key}' are duplicates based on a similarity score of ${bestMatch.score!.toFixed(
+            2
+          )}.`,
+        });
+
+        // Mark both issues as processed
+        processedIssues.add(issue.key);
+        processedIssues.add(matchedIssue.key);
+      }
     }
   }
 
   return duplicateGroups;
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    res.status(405).json({ error: 'Method Not Allowed' });
+    console.warn(`Method ${req.method} not allowed on /api/detect-duplicates`);
+    return;
+  }
+
+  const { issues, config } = req.body;
+
+  if (!issues || !Array.isArray(issues) || issues.length === 0 || !config) {
+    console.warn('Invalid issues or config provided:', issues, config);
+    res.status(400).json({ error: 'Invalid issues or Jira config provided.' });
+    return;
+  }
+
+  try {
+    const duplicateGroups = await detectDuplicatesWithPinecone(issues, config as JiraConfig);
+    res.status(200).json({ duplicates: duplicateGroups });
+  } catch (error: any) {
+    console.error('Error detecting duplicates:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to detect duplicates',
+    });
+  }
 }

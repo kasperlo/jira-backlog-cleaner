@@ -1,8 +1,8 @@
 // scripts/generateEmbeddings.ts
 
-import jira from '../lib/jiraClient';
+import { createJiraClient, JiraConfig } from '../lib/jiraClient';
 import openai from '../lib/openaiClient';
-import pinecone from '../lib/pineconeClient';
+import pineconeClient from '../lib/pineconeClient'; // Assuming you have a named export
 
 interface JiraIssue {
   id: string;
@@ -19,18 +19,26 @@ interface JiraIssue {
   };
 }
 
+interface PineconeVector {
+  id: string;
+  values: number[];
+  metadata?: {
+    [key: string]: any;
+  };
+}
+
 async function generateIssueEmbeddings() {
   try {
-    const indexName = 'masterz';
-    const indexes = await pinecone.listIndexes();
+    const indexName = 'masterz-3072'; // Updated index name
+    const indexes = await pineconeClient.listIndexes();
 
     // Convert to array of index names to use `includes`
     const indexNames = indexes?.indexes?.map((index) => index.name);
 
     if (!indexNames?.includes(indexName)) {
-      await pinecone.createIndex({
+      await pineconeClient.createIndex({
         name: indexName,
-        dimension: 1536, // Adjust based on the embedding model used
+        dimension: 3072, // Updated dimension for text-embedding-3-large
         metric: 'cosine',
         spec: {
           serverless: {
@@ -40,13 +48,23 @@ async function generateIssueEmbeddings() {
         },
       });
       console.log('Waiting for index to be ready...');
-      await new Promise((resolve) => setTimeout(resolve, 60000));
+      await new Promise((resolve) => setTimeout(resolve, 60000)); // Wait 60 seconds for index creation
     }
 
-    const index = pinecone.index(indexName);
+    const index = pineconeClient.index(indexName);
 
-    const jql = 'project = "BG"'; // Adjust as needed
-    const response = await jira.searchJira(jql, {
+    // Replace with your Jira config
+    const config: JiraConfig = {
+      jiraEmail: 'your-email@example.com',
+      jiraApiToken: 'your-api-token',
+      jiraBaseUrl: 'https://your-domain.atlassian.net',
+      projectKey: 'BG',
+    };
+
+    const jiraClient = createJiraClient(config);
+
+    const jql = `project = "${config.projectKey}"`; // Adjust as needed
+    const response = await jiraClient.searchJira(jql, {
       fields: ['summary', 'description', 'issuetype', 'parent'],
       maxResults: 1000,
     });
@@ -57,7 +75,7 @@ async function generateIssueEmbeddings() {
       issues.map(async (issue) => {
         const text = `${issue.fields.summary}\n${issue.fields.description || ''}`;
         const embeddingResponse = await openai.embeddings.create({
-          model: 'text-embedding-ada-002',
+          model: 'text-embedding-3-large', // Updated model
           input: text,
         });
         const embedding = embeddingResponse.data[0].embedding;
@@ -76,12 +94,17 @@ async function generateIssueEmbeddings() {
       })
     );
 
-    // Directly pass the array of vectors to upsert
-    await index.upsert(upsertVectors);
+    // Batch upsert to Pinecone to handle large volumes efficiently
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < upsertVectors.length; i += BATCH_SIZE) {
+      const batch = upsertVectors.slice(i, i + BATCH_SIZE);
+      await index.upsert(batch);
+      console.log(`Upserted batch ${i / BATCH_SIZE + 1}`);
+    }
 
     console.log('Embeddings generated and upserted to Pinecone successfully.');
-  } catch (error) {
-    console.error('Error generating embeddings:', error);
+  } catch (error: any) {
+    console.error('Error generating embeddings:', error.response?.data || error);
   }
 }
 

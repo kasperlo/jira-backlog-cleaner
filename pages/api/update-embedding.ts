@@ -1,7 +1,7 @@
 // pages/api/update-embeddings.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import jira from '../../lib/jiraClient';
+import { createJiraClient, JiraConfig } from '../../lib/jiraClient';
 import openai from '../../lib/openaiClient';
 import { Pinecone } from '@pinecone-database/pinecone';
 
@@ -14,23 +14,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
-  const { issueKey } = req.body;
+  const { issueKey, config } = req.body;
 
-  if (!issueKey) {
-    res.status(400).json({ error: 'Issue key is required.' });
+  if (!issueKey || !config) {
+    res.status(400).json({ error: 'Issue key and Jira config are required.' });
     return;
   }
 
+  // Validate JiraConfig structure (optional but recommended)
+  const { jiraEmail, jiraApiToken, jiraBaseUrl, projectKey } = config as JiraConfig;
+  if (!jiraEmail || !jiraApiToken || !jiraBaseUrl || !projectKey) {
+    return res.status(400).json({ error: 'Incomplete Jira configuration.' });
+  }
+
+  // Instantiate JiraClient with the provided config
+  const jiraClient = createJiraClient(config as JiraConfig);
+
   try {
-    const issue = await jira.findIssue(issueKey, '', 'summary,description,issuetype,parent');
+    const issue = await jiraClient.findIssue(issueKey, '', 'summary,description,issuetype,parent');
     const text = `${issue.fields.summary}\n${issue.fields.description || ''}`;
     const embeddingResponse = await openai.embeddings.create({
-      model: 'text-embedding-ada-002',
+      model: 'text-embedding-3-large',
       input: text,
     });
     const embedding = embeddingResponse.data[0].embedding;
 
-    const index = pinecone.index('masterz');
+    const index = pinecone.Index('masterz-3072');
 
     await index.upsert([
       {
@@ -47,10 +56,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ]);
 
     res.status(200).json({ message: 'Embedding updated successfully.' });
-  } catch (error) {
-    console.error('Error updating embedding:', error);
+  } catch (error: any) {
+    console.error('Error updating embedding:', error.response?.data || error);
     res.status(500).json({
-      error: 'Failed to update embedding.',
+      error: error.response?.data?.errorMessages?.[0] || 'Failed to update embedding.',
     });
   }
 }

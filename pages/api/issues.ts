@@ -1,10 +1,11 @@
 // pages/api/issues.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import jira from '../../lib/jiraClient';
+import JiraClient from 'jira-client';
 import openai from '../../lib/openaiClient';
 import pinecone from '../../lib/pineconeClient';
 
+// Define the structure of Jira issues
 interface JiraIssue {
   id: string;
   key: string;
@@ -17,93 +18,99 @@ interface JiraIssue {
     parent?: {
       key: string;
     };
+    created: string;
+    subtasks?: Array<{
+      id: string;
+      key: string;
+      fields: {
+        summary: string;
+        description?: string;
+        issuetype: {
+          name: string;
+        };
+        parent?: {
+          key: string;
+        };
+      };
+    }>;
   };
 }
 
+// Define the structure of Pinecone vectors
 interface PineconeVector {
   id: string;
   values: number[];
   metadata?: {
-    [key: string]: any;
+    issueKey: string;
+    summary: string;
+    description: string;
+    issuetype: string;
+    parentKey: string;
   };
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  try {
-    const jql = 'project = "BG"'; // Fetch all issues in project BG
-    const maxResults = 1000; // Maximum allowed by Jira per request
-    let startAt = 0;
-    let total = 0;
-    let allIssues: JiraIssue[] = [];
-
-    do {
-      const response = await jira.searchJira(jql, {
-        fields: ['summary', 'description', 'issuetype', 'parent', 'status'],
-        maxResults,
-        startAt,
-      });
-
-      if (!response || !response.issues) {
-        console.error('Invalid or empty response from Jira API:', response);
-        res.status(500).json({ error: 'Received empty response from Jira API' });
-        return;
-      }
-
-      allIssues = allIssues.concat(response.issues);
-      total = response.total;
-      startAt += response.maxResults;
-
-      console.log(`Fetched ${response.issues.length} issues, total fetched so far: ${allIssues.length}`);
-    } while (startAt < total);
-
-    // Process all issues to ensure they are in Pinecone
-    await processIssuesForPinecone(allIssues);
-
-    res.status(200).json({ issues: allIssues });
-  } catch (error: any) {
-    console.error('Error fetching Jira issues:', error);
-
-    if (error.response) {
-      console.error('Error status:', error.response.status);
-      console.error('Error response headers:', error.response.headers);
-      console.error('Error response data:', error.response.data);
-    } else {
-      console.error('Error message:', error.message);
-    }
-
-    res.status(500).json({ error: error.message || 'Failed to fetch Jira issues' });
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    res.status(405).json({ error: 'Method Not Allowed' });
+    return;
   }
-}
 
-async function processIssuesForPinecone(issues: JiraIssue[]) {
+  const { config } = req.body;
+
+  // Validate Jira configuration
+  if (
+    !config ||
+    !config.jiraEmail ||
+    !config.jiraApiToken ||
+    !config.jiraBaseUrl ||
+    !config.projectKey
+  ) {
+    res.status(400).json({ error: 'Invalid Jira configuration provided.' });
+    return;
+  }
+
+  // Initialize Jira client with user-provided configuration
+  const jira = new JiraClient({
+    protocol: 'https',
+    host: config.jiraBaseUrl.replace(/^https?:\/\//, ''), // Remove protocol
+    username: config.jiraEmail,
+    password: config.jiraApiToken,
+    apiVersion: '2',
+    strictSSL: true,
+  });
+
   try {
-    const index = pinecone.index('masterz'); // Use your index name
-    const upsertVectors: PineconeVector[] = [];
-    const BATCH_SIZE = 100;
+    // Construct JQL to fetch issues from the specified project
+    const jql = `project = "${config.projectKey}" ORDER BY created DESC`;
 
-    // Fetch existing vector IDs from Pinecone
-    const existingIds = await fetchExistingIds(index, issues.map(issue => issue.key));
+    // Fetch issues from Jira
+    const response = await jira.searchJira(jql, {
+      fields: ['summary', 'description', 'issuetype', 'parent', 'created', 'subtasks'],
+      maxResults: 1000, // Adjust as needed
+    });
+
+    const issues: JiraIssue[] = response.issues;
+
+    // Initialize Pinecone index
+    const indexName = 'masterz-3072'; // Ensure this is the new index name with 3072 dimensions
+    const index = pinecone.index(indexName);
+
+    const upsertVectors: PineconeVector[] = [];
 
     for (const issue of issues) {
-      if (existingIds.has(issue.key)) {
-        continue; // Skip if already exists
-      }
-
+      // Combine summary and description
       const text = `${issue.fields.summary}\n${issue.fields.description || ''}`;
 
-      // Generate embedding
-      let embedding: number[];
-      try {
-        const embeddingResponse = await openai.embeddings.create({
-          model: 'text-embedding-ada-002',
-          input: text,
-        });
-        embedding = embeddingResponse.data[0].embedding;
-      } catch (error) {
-        console.error(`Error generating embedding for issue ${issue.key}:`, error);
-        continue; // Skip this issue and continue processing others
-      }
+      // Generate embedding using OpenAI
+      const embeddingResponse = await openai.embeddings.create({
+        model: 'text-embedding-3-large', // Updated model
+        input: text,
+      });
 
+      const embedding = embeddingResponse.data[0].embedding;
+
+      // Prepare the vector for Pinecone
       upsertVectors.push({
         id: issue.key,
         values: embedding,
@@ -116,52 +123,21 @@ async function processIssuesForPinecone(issues: JiraIssue[]) {
         },
       });
 
-      if (upsertVectors.length >= BATCH_SIZE) {
-        try {
-          // Upsert the batch by passing the array directly
-          await index.upsert(upsertVectors);
-          upsertVectors.length = 0; // Clear the array
-        } catch (error) {
-          console.error('Error upserting vectors to Pinecone:', error);
-          throw error; // Re-throw the error
-        }
-      }
+      // Optionally handle subtasks if needed
+      // For simplicity, we are only upserting top-level issues
     }
 
-    // Upsert any remaining vectors
-    if (upsertVectors.length > 0) {
-      try {
-        await index.upsert(upsertVectors); // Pass the array directly
-      } catch (error) {
-        console.error('Error upserting vectors to Pinecone:', error);
-        throw error;
-      }
+    // Batch upsert vectors to Pinecone
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < upsertVectors.length; i += BATCH_SIZE) {
+      const batch = upsertVectors.slice(i, i + BATCH_SIZE);
+      await index.upsert(batch);
+      console.log(`Upserted batch ${i / BATCH_SIZE + 1}`);
     }
-  } catch (error) {
-    console.error('Error in processIssuesForPinecone:', error);
-    throw error; // Rethrow to be handled by the caller
+
+    res.status(200).json({ issues });
+  } catch (error: any) {
+    console.error('Error fetching Jira issues:', error.message || error);
+    res.status(500).json({ error: 'Failed to fetch Jira issues.' });
   }
 }
-
-async function fetchExistingIds(index: any, ids: string[]): Promise<Set<string>> {
-  const existingIds = new Set<string>();
-  const CHUNK_SIZE = 100; // Pinecone fetch can handle up to 100 IDs at a time
-
-  for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
-    const chunk = ids.slice(i, i + CHUNK_SIZE);
-    try {
-      const fetchResponse = await index.fetch(chunk); // Corrected here
-      const vectors = fetchResponse?.vectors || {};
-      for (const id in vectors) {
-        existingIds.add(id);
-      }
-    } catch (error) {
-      console.error('Error fetching existing IDs from Pinecone:', error);
-      throw error; // Re-throw to be handled by the caller
-    }
-  }
-
-  return existingIds;
-}
-
-

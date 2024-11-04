@@ -1,7 +1,7 @@
 // pages/api/link-issues.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import jira from '../../lib/jiraClient';
+import JiraClient from 'jira-client';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -10,29 +10,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
-  const { issueKeys } = req.body;
+  const { sourceIssueKey, targetIssueKeys, config } = req.body;
 
-  if (!issueKeys || !Array.isArray(issueKeys) || issueKeys.length < 2) {
-    res.status(400).json({ error: 'Invalid issue keys provided.' });
+  if (!config || !config.jiraEmail || !config.jiraApiToken || !config.jiraBaseUrl || !config.projectKey) {
+    console.warn('Invalid Jira configuration provided:', config);
+    res.status(400).json({ error: 'Invalid Jira configuration provided.' });
     return;
   }
 
-  try {
-    // Link each issue to the first one as duplicates
-    for (let i = 1; i < issueKeys.length; i++) {
-        await jira.issueLink({
-            type: { name: 'Duplicate' },
-            inwardIssue: { key: issueKeys[0] },
-            outwardIssue: { key: issueKeys[i] },
-        });          
-    }
+  if (!sourceIssueKey || !targetIssueKeys || !Array.isArray(targetIssueKeys) || targetIssueKeys.length < 1) {
+    res.status(400).json({ error: 'Source issue key and at least one target issue key are required.' });
+    return;
+  }
 
-    res.status(200).json({ message: 'Issues linked as duplicates successfully.' });
+  // Initialize Jira client with user-provided config
+  const jira = new JiraClient({
+    protocol: 'https',
+    host: config.jiraBaseUrl.replace(/^https?:\/\//, ''), // Remove protocol
+    username: config.jiraEmail,
+    password: config.jiraApiToken,
+    apiVersion: '2',
+    strictSSL: true,
+  });
+
+  try {
+    // Create links in batch
+    const linkPromises = targetIssueKeys.map((dupKey) =>
+      jira.issueLink({
+        type: { name: 'Duplicate' },
+        inwardIssue: { key: sourceIssueKey },
+        outwardIssue: { key: dupKey },
+      })
+    );
+
+    await Promise.all(linkPromises);
+
+    res.status(200).json({ message: `Issues ${targetIssueKeys.join(', ')} linked as duplicates to ${sourceIssueKey} successfully.` });
   } catch (error: any) {
     console.error('Error linking issues:', error.response?.data || error);
     res.status(500).json({
       error:
-        error.response?.data?.errorMessages?.[0] || 'Failed to link issues.',
+        error.response?.data?.errorMessages?.[0] || 'Failed to link issues as duplicates.',
     });
   }
 }

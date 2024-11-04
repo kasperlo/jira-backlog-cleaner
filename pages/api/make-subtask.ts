@@ -1,24 +1,37 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import jira from '../../lib/jiraClient';
+// pages/api/make-subtask.ts
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
+import type { NextApiRequest, NextApiResponse } from 'next';
+import JiraClient from 'jira-client';
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     res.status(405).end('Method Not Allowed');
     return;
   }
 
-  const { parentIssueKey, subtaskIssueKey } = req.body;
+  const { parentIssueKey, subtaskIssueKey, config } = req.body;
 
-  if (!parentIssueKey || !subtaskIssueKey) {
-    res.status(400).json({
-      error: 'Parent issue key and subtask issue key are required.',
-    });
+  if (!config || !config.jiraEmail || !config.jiraApiToken || !config.jiraBaseUrl || !config.projectKey) {
+    console.warn('Invalid Jira configuration provided:', config);
+    res.status(400).json({ error: 'Invalid Jira configuration provided.' });
     return;
   }
+
+  if (!parentIssueKey || !subtaskIssueKey) {
+    res.status(400).json({ error: 'Parent issue key and subtask issue key are required.' });
+    return;
+  }
+
+  // Initialize Jira client with user-provided config
+  const jira = new JiraClient({
+    protocol: 'https',
+    host: config.jiraBaseUrl.replace(/^https?:\/\//, ''), // Remove protocol
+    username: config.jiraEmail,
+    password: config.jiraApiToken,
+    apiVersion: '2',
+    strictSSL: true,
+  });
 
   try {
     // Fetch details of parent and subtask issues
@@ -93,7 +106,7 @@ export default async function handler(
           key: parentIssueKey,
         },
         summary: subtaskIssue.fields.summary,
-        description: subtaskIssue.fields.description,
+        description: subtaskIssue.fields.description || '',
         issuetype: {
           id: subtaskIssueTypeId,
         },
@@ -108,9 +121,14 @@ export default async function handler(
       newSubtaskKey: newSubtask.key,
     });
   } catch (error: any) {
-    console.error('Error making subtask:', error?.response?.data || error);
-    res.status(500).json({
-      error: error?.response?.data?.errors || error.message || 'Failed to make subtask.',
-    });
+    // Handle errors from Jira API
+    if (error.response) {
+      const { status, data } = error.response;
+      res.status(status).json({ error: data.errorMessages?.[0] || data.message || 'Unknown error from Jira API.' });
+      console.error(`Jira API Error: ${status} - ${data.errorMessages?.[0] || data.message}`);
+    } else {
+      res.status(500).json({ error: 'Internal server error while promoting to Epic.' });
+      console.error('Internal server error while promoting to Epic:', error.message);
+    }
   }
 }
