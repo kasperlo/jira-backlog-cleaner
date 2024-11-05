@@ -73,12 +73,18 @@ async function generateIssueEmbeddings() {
 
     const upsertVectors = await Promise.all(
       issues.map(async (issue) => {
+        // Log fetching the issue
+        console.log(`fetched ${issue.key} from jira`);
+
         const text = `${issue.fields.summary}\n${issue.fields.description || ''}`;
         const embeddingResponse = await openai.embeddings.create({
           model: 'text-embedding-3-large', // Updated model
           input: text,
         });
         const embedding = embeddingResponse.data[0].embedding;
+
+        // Log embedding creation
+        console.log(`created vector embedding for ${issue.key} in pinecone`);
 
         return {
           id: issue.key,
@@ -94,12 +100,17 @@ async function generateIssueEmbeddings() {
       })
     );
 
-    // Batch upsert to Pinecone to handle large volumes efficiently
+    // Batch upsert vectors to Pinecone
     const BATCH_SIZE = 100;
     for (let i = 0; i < upsertVectors.length; i += BATCH_SIZE) {
       const batch = upsertVectors.slice(i, i + BATCH_SIZE);
       await index.upsert(batch);
-      console.log(`Upserted batch ${i / BATCH_SIZE + 1}`);
+      console.log(`Upserted batch ${i / BATCH_SIZE + 1} to pinecone`);
+      
+      // Log each upserted issue
+      batch.forEach((vector) => {
+        console.log(`updated vector embedding for ${vector.id} in pinecone`);
+      });
     }
 
     console.log('Embeddings generated and upserted to Pinecone successfully.');

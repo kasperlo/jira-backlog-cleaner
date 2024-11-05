@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   Box,
   Heading,
@@ -25,11 +25,21 @@ import {
   HStack,
   useToast,
   Divider,
+  CircularProgress,
+  CircularProgressLabel,
+  VStack,
+  Tooltip,
 } from '@chakra-ui/react';
 import axios from 'axios';
-import { ActionSuggestion, DuplicateGroup, JiraIssue, Suggestion, ActionType } from '../types/types'; // Ensure correct import path
-import JiraConfigForm from '../components/JiraConfigForm'; // Import the form component
-import { useJira } from '../context/JiraContext'; // Import the context
+import {
+  ActionSuggestion,
+  DuplicateGroup,
+  JiraIssue,
+  Suggestion,
+  ActionType,
+} from '../types/types';
+import JiraConfigForm from '../components/JiraConfigForm';
+import { useJira } from '../context/JiraContext';
 
 interface JiraConfig {
   jiraEmail: string;
@@ -38,12 +48,25 @@ interface JiraConfig {
   projectKey: string;
 }
 
+interface ProgressData {
+  total: number;
+  completed: number;
+  status: 'idle' | 'processing' | 'completed' | 'error';
+  errorMessage?: string;
+}
+
 export default function HomePage() {
   const { config } = useJira();
   const [issues, setIssues] = useState<JiraIssue[]>([]);
   const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [duplicateLoading, setDuplicateLoading] = useState<boolean>(false);
+  const [processing, setProcessing] = useState<boolean>(false);
+  const [progress, setProgress] = useState<ProgressData>({
+    total: 0,
+    completed: 0,
+    status: 'idle',
+  });
   const [error, setError] = useState<string>('');
   const [duplicateError, setDuplicateError] = useState<string>('');
   const [selectedGroup, setSelectedGroup] = useState<DuplicateGroup | null>(null);
@@ -55,39 +78,130 @@ export default function HomePage() {
   const [projectDescription, setProjectDescription] = useState<string>('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [suggesting, setSuggesting] = useState<boolean>(false);
+  const [progressPercentage, setProgressPercentage] = useState<number>(0);
 
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
 
-  /**
-   * Fetches Jira issues from the backend API.
-   */
-  const fetchIssues = async (config: JiraConfig) => {
-    setLoading(true);
-    setError('');
-    try {
-      const response = await axios.post('/api/issues', { config });
-      setIssues(response.data.issues);
-      setDuplicates([]);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startProcessing = async () => {
+    if (!config) {
       toast({
-        title: 'Issues fetched successfully.',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (err: any) {
-      console.error('Error fetching issues:', err);
-      setError('Failed to fetch Jira issues. Please check your configuration.');
-      toast({
-        title: 'Error fetching issues.',
-        description: 'Please check your Jira configuration and try again.',
+        title: 'Jira configuration missing.',
+        description: 'Please configure your Jira settings first.',
         status: 'error',
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
       });
-    } finally {
-      setLoading(false);
+      return;
     }
+
+    setProcessing(true);
+    setProgress({
+      total: 0,
+      completed: 0,
+      status: 'processing',
+    });
+    setIssues([]);
+    setError('');
+
+    try {
+      const response = await axios.post('/api/issues', {
+        config,
+        action: 'process',
+      });
+
+      if (response.status === 202) {
+        toast({
+          title: 'Processing Started',
+          description: 'Issue processing has begun.',
+          status: 'info',
+          duration: 3000,
+          isClosable: true,
+        });
+
+        // Start polling progress and issues
+        startPolling();
+      } else {
+        throw new Error('Failed to start processing.');
+      }
+    } catch (error: any) {
+      console.error('Error starting processing:', error);
+      setProcessing(false);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to start processing.',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const startPolling = () => {
+    // Clear any existing intervals
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    pollingIntervalRef.current = setInterval(async () => {
+      try {
+        // Fetch progress
+        const progressResponse = await axios.get('/api/progress');
+        const progressData: ProgressData = progressResponse.data;
+        setProgress(progressData);
+
+        // Update progress percentage
+        const percentage =
+          progressData.total > 0 ? (progressData.completed / progressData.total) * 100 : 0;
+        setProgressPercentage(percentage);
+
+        // Fetch processed issues
+        const issuesResponse = await axios.post('/api/issues', {
+          config,
+          action: 'fetchProcessedIssues',
+        });
+        setIssues(issuesResponse.data.issues || []);
+
+        // Check if processing is completed or errored
+        if (progressData.status === 'completed') {
+          clearInterval(pollingIntervalRef.current!);
+          pollingIntervalRef.current = null;
+          setProcessing(false);
+          toast({
+            title: 'Processing Completed',
+            description: 'All issues have been processed successfully.',
+            status: 'success',
+            duration: 5000,
+            isClosable: true,
+          });
+        } else if (progressData.status === 'error') {
+          clearInterval(pollingIntervalRef.current!);
+          pollingIntervalRef.current = null;
+          setProcessing(false);
+          toast({
+            title: 'Processing Error',
+            description: progressData.errorMessage || 'An error occurred during processing.',
+            status: 'error',
+            duration: 5000,
+            isClosable: true,
+          });
+        }
+      } catch (error) {
+        console.error('Error during polling:', error);
+        clearInterval(pollingIntervalRef.current!);
+        pollingIntervalRef.current = null;
+        setProcessing(false);
+        toast({
+          title: 'Error',
+          description: 'An error occurred during polling.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+    }, 2000); // Poll every 2 seconds
   };
 
   /**
@@ -95,7 +209,7 @@ export default function HomePage() {
    */
   const detectDuplicates = async () => {
     if (!config) {
-      setDuplicateError('Please configure your Jira settings first.');
+      setError('Please configure your Jira settings first.');
       return;
     }
 
@@ -103,7 +217,7 @@ export default function HomePage() {
     setDuplicateError('');
     try {
       const response = await axios.post('/api/detect-duplicates', { issues, config });
-      setDuplicates(response.data.duplicates);
+      setDuplicates(response.data.duplicates || []);
       toast({
         title: 'Duplicate detection completed.',
         status: 'success',
@@ -125,79 +239,64 @@ export default function HomePage() {
     }
   };
 
-  /**
-   * Suggests new issues based on the project description by calling the backend API.
-   */
-  const suggestNewIssues = async () => {
-    if (!config) {
-      setError('Please configure your Jira settings first.');
-      return;
-    }
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
 
-    setSuggesting(true);
-    setError('');
+  /**
+   * Handles actions related to subtasks (delete or convert).
+   * @param parentIssueKey - The key of the parent issue.
+   * @param action - The action to perform ('delete' or 'convert').
+   */
+  const handleSubtaskAction = async (parentIssueKey: string, action: 'delete' | 'convert') => {
+    if (!subtasks || subtasks.length === 0 || !config) return;
+
+    setActionInProgress(true);
     try {
-      const response = await axios.post('/api/suggest-new-issues', {
-        projectDescription,
-        config,
-      });
-      setSuggestions(response.data.suggestions);
+      if (action === 'delete') {
+        // Delete all subtasks
+        for (const subtask of subtasks) {
+          await handleDeleteIssueResponse(subtask.key, false); // Pass false to skip confirmation
+        }
+        toast({
+          title: `All subtasks of ${parentIssueKey} have been deleted.`,
+          status: 'info',
+          duration: 3000,
+          isClosable: true,
+        });
+      } else if (action === 'convert') {
+        // Convert all subtasks to separate tasks
+        for (const subtask of subtasks) {
+          await axios.post('/api/convert-to-task', {
+            issueKey: subtask.key,
+            config,
+          });
+        }
+        toast({
+          title: `All subtasks of ${parentIssueKey} have been converted to separate tasks.`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+        fetchIssuesData();
+      }
+    } catch (error: any) {
+      console.error(`Error performing subtask action (${action}):`, error);
       toast({
-        title: 'New issues suggested successfully.',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (err: any) {
-      console.error('Error suggesting new issues:', err);
-      setError('Failed to suggest new issues: ' + (err.response?.data?.error || err.message));
-      toast({
-        title: 'Error suggesting new issues.',
-        description: 'Please try again later.',
+        title: `Failed to ${action} subtasks.`,
         status: 'error',
         duration: 3000,
         isClosable: true,
       });
     } finally {
-      setSuggesting(false);
-    }
-  };
-
-  /**
-   * Creates a new issue in Jira by calling the backend API.
-   * @param suggestion - The suggestion to create.
-   * @param isEpic - Whether the issue is an Epic.
-   */
-  const createIssueInJira = async (suggestion: Suggestion, isEpic: boolean = false) => {
-    if (!config) {
-      toast({
-        title: 'Jira configuration missing.',
-        description: 'Please configure your Jira settings first.',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    try {
-      const response = await axios.post('/api/create-issue', { suggestion, isEpic, config });
-      toast({
-        title: `Issue ${response.data.issueKey} created successfully.`,
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-      fetchIssues(config as JiraConfig);
-    } catch (err: any) {
-      console.error('Error creating issue:', err);
-      toast({
-        title: 'Failed to create issue.',
-        description: err.response?.data?.error || 'Please try again later.',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
+      setActionInProgress(false);
+      setSubtasks(null);
+      onClose();
     }
   };
 
@@ -243,11 +342,9 @@ export default function HomePage() {
                 duration: 3000,
                 isClosable: true,
               });
-            // Implement a default action if necessary
           }
         } else {
           console.log('No recommendation available. Proceeding to handle manually.');
-          // Implement default action if necessary
         }
 
         setDuplicates((prev) => prev.filter((group) => group !== selectedGroup));
@@ -327,14 +424,14 @@ export default function HomePage() {
 
       const issuetype = 'Task'; // Modify as needed or derive dynamically
 
-      const suggestion: Suggestion = {
+      const newSuggestion: Suggestion = {
         summary: createIssueSummary,
         description: description,
         issuetype: issuetype,
       };
 
       // Create the new issue by sending the Suggestion object
-      const response = await axios.post('/api/create-issue', { suggestion, isEpic: false, config });
+      const response = await axios.post('/api/create-issue', { suggestion: newSuggestion, isEpic: false, config });
 
       toast({
         title: `New issue ${response.data.issueKey} has been created successfully.`,
@@ -343,13 +440,18 @@ export default function HomePage() {
         isClosable: true,
       });
 
+      // Delete the original issues
+      for (const issueKey of deleteIssueKeys) {
+        await handleDeleteIssueResponse(issueKey, false); // Pass false to skip confirmation
+      }
+
       // Optionally, mark the original issues as duplicates in Jira
       const confirmMarkDuplicates = window.confirm('Would you like to mark the deleted issues as duplicates of the new issue in Jira?');
       if (confirmMarkDuplicates) {
         await markIssuesAsDuplicates(issuesToDelete, response.data.issueKey);
       }
 
-      fetchIssues(config as JiraConfig);
+      fetchIssuesData();
     } catch (error: any) {
       console.error('Error performing delete and create action:', error);
       toast({
@@ -384,7 +486,7 @@ export default function HomePage() {
         duration: 3000,
         isClosable: true,
       });
-      fetchIssues(config as JiraConfig);
+      fetchIssuesData();
     } catch (error: any) {
       console.error('Error converting to subtask:', error);
       toast({
@@ -471,7 +573,7 @@ export default function HomePage() {
           duration: 3000,
           isClosable: true,
         });
-        fetchIssues(config as JiraConfig);
+        fetchIssuesData();
       } else {
         throw new Error(response.data.error || 'Failed to link issues.');
       }
@@ -525,64 +627,13 @@ export default function HomePage() {
   };
 
   /**
-   * Handles actions related to subtasks (delete or convert).
-   * @param parentIssueKey - The key of the parent issue.
-   * @param action - The action to perform ('delete' or 'convert').
-   */
-  const handleSubtaskAction = async (parentIssueKey: string, action: 'delete' | 'convert') => {
-    if (!subtasks || subtasks.length === 0 || !config) return;
-
-    setActionInProgress(true);
-    try {
-      if (action === 'delete') {
-        // Delete all subtasks
-        for (const subtask of subtasks) {
-          await handleDeleteIssueResponse(subtask.key);
-        }
-        toast({
-          title: `All subtasks of ${parentIssueKey} have been deleted.`,
-          status: 'info',
-          duration: 3000,
-          isClosable: true,
-        });
-      } else if (action === 'convert') {
-        // Convert all subtasks to separate tasks
-        for (const subtask of subtasks) {
-          await axios.post('/api/convert-to-task', {
-            issueKey: subtask.key,
-            config,
-          });
-        }
-        toast({
-          title: `All subtasks of ${parentIssueKey} have been converted to separate tasks.`,
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-        fetchIssues(config as JiraConfig);
-      }
-    } catch (error: any) {
-      console.error(`Error performing subtask action (${action}):`, error);
-      toast({
-        title: `Failed to ${action} subtasks.`,
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    } finally {
-      setActionInProgress(false);
-      setSubtasks(null);
-      onClose();
-    }
-  };
-
-  /**
    * Deletes a Jira issue by calling the backend API.
    * @param issueKey - The key of the issue to delete.
+   * @param confirmPrompt - Whether to show confirmation prompt (default true).
    */
-  const handleDeleteIssueResponse = async (issueKey: string) => {
-    const confirmDelete = window.confirm(`Are you sure you want to delete issue ${issueKey}?`);
-    if (!confirmDelete) return;
+  const handleDeleteIssueResponse = async (issueKey: string, confirmPrompt: boolean = true) => {
+    const proceed = confirmPrompt ? window.confirm(`Are you sure you want to delete issue ${issueKey}?`) : true;
+    if (!proceed) return;
 
     setActionInProgress(true);
     try {
@@ -593,7 +644,7 @@ export default function HomePage() {
         duration: 3000,
         isClosable: true,
       });
-      fetchIssues(config as JiraConfig);
+      fetchIssuesData();
     } catch (error: any) {
       console.error('Error deleting issue:', error);
       toast({
@@ -608,14 +659,38 @@ export default function HomePage() {
     }
   };
 
-  useEffect(() => {
-    if (config) {
-      fetchIssues(config as JiraConfig);
+  /**
+   * Fetches issues data after processing is complete.
+   */
+  const fetchIssuesData = async () => {
+    if (!config) return;
+    setLoading(true);
+    setError('');
+    try {
+      const response = await axios.post('/api/issues', { config, action: 'fetch' });
+      setIssues(response.data.issues || []);
+      setDuplicates([]);
+      toast({
+        title: 'Issues fetched successfully.',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err: any) {
+      console.error('Error fetching issues:', err);
+      setError('Failed to fetch Jira issues. Please check your configuration.');
+      toast({
+        title: 'Error fetching issues.',
+        description: 'Please check your Jira configuration and try again.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config]);
+  };
 
-  // Render the main content only if the Jira configuration is valid
   return (
     <Box p={4}>
       <Heading mb={4}>Jira Backlog Manager</Heading>
@@ -625,43 +700,52 @@ export default function HomePage() {
         <JiraConfigForm />
       ) : (
         <>
-          {/* Suggest New Issues Section */}
-          <Box mb={6}>
-            <Heading size="md" mb={2}>
-              Suggest New Issues
-            </Heading>
-            <Textarea
-              placeholder="Enter project description..."
-              value={projectDescription}
-              onChange={(e) => setProjectDescription(e.target.value)}
-              mb={2}
-            />
-            <Button onClick={suggestNewIssues} isLoading={suggesting} colorScheme="teal">
-              Suggest New Issues
-            </Button>
-          </Box>
-
           <HStack spacing={4} justify="center">
-            <Button colorScheme="teal" onClick={() => fetchIssues(config as JiraConfig)} isLoading={loading}>
-              Refresh Issues
-            </Button>
             <Button
-              colorScheme="blue"
-              onClick={detectDuplicates}
-              isLoading={duplicateLoading}
-              disabled={issues.length === 0}
+              colorScheme="teal"
+              onClick={startProcessing}
+              isLoading={processing}
+              isDisabled={processing}
             >
-              Detect Duplicates
+              {processing ? 'Processing...' : 'Process Issues'}
             </Button>
+            <Tooltip label={issues.length === 0 ? "Process issues before detection is possible" : ""}>
+              <Button
+                colorScheme="blue"
+                onClick={detectDuplicates}
+                isLoading={duplicateLoading}
+                disabled={issues.length === 0}
+              >
+                Detect Duplicates
+              </Button>
+            </Tooltip>
           </HStack>
 
           {error && (
-            <Alert status="error" mb={4}>
+            <Alert status="error" mt={4}>
               <AlertIcon />
               {error}
             </Alert>
           )}
 
+          {processing && (
+            <VStack spacing={4} mt={6}>
+              <CircularProgress
+                value={progressPercentage}
+                color="teal.400"
+                size="120px"
+                thickness="8px"
+              >
+                <CircularProgressLabel>{`${Math.round(progressPercentage)}%`}</CircularProgressLabel>
+              </CircularProgress>
+              <Text>
+                {progress.completed} / {progress.total} issues processed
+              </Text>
+              <Spinner />
+            </VStack>
+          )}
+
+          {/* Duplicate Detection Results */}
           {duplicates.length > 0 && (
             <Box mb={4}>
               <Heading size="md">Potential Duplicate Pairs</Heading>
@@ -698,6 +782,7 @@ export default function HomePage() {
             </Box>
           )}
 
+          {/* All Issues List */}
           <Heading size="md" mt={6}>
             All Issues
           </Heading>
@@ -786,46 +871,7 @@ export default function HomePage() {
                       GPT-4 Recommendation (Action {suggestion.action}):
                     </Text>
                     <Text mb={4}>{suggestion.description}</Text>
-                    {suggestion.action === 1 && suggestion.keepIssueKey && suggestion.deleteIssueKey ? (
-                      <Box>
-                        <Text>
-                          <strong>Keep Issue:</strong> {suggestion.keepIssueKey}
-                        </Text>
-                        <Text>
-                          <strong>Delete Issue:</strong> {suggestion.deleteIssueKey}
-                        </Text>
-                      </Box>
-                    ) : suggestion.action === 2 && suggestion.deleteIssueKeys && suggestion.createIssueSummary && suggestion.createIssueDescription ? (
-                      <Box>
-                        <Text>
-                          <strong>Delete Issues:</strong> {suggestion.deleteIssueKeys.join(', ')}
-                        </Text>
-                        <Text>
-                          <strong>Create New Issue Summary:</strong> {suggestion.createIssueSummary}
-                        </Text>
-                        <Text>
-                          <strong>Create New Issue Description:</strong> {suggestion.createIssueDescription}
-                        </Text>
-                      </Box>
-                    ) : suggestion.action === 3 && suggestion.parentIssueKey && suggestion.subtaskIssueKey ? (
-                      <Box>
-                        <Text>
-                          <strong>Parent Issue:</strong> {suggestion.parentIssueKey}
-                        </Text>
-                        <Text>
-                          <strong>Subtask Issue:</strong> {suggestion.subtaskIssueKey}
-                        </Text>
-                      </Box>
-                    ) : suggestion.action === 4 ? (
-                      <Box>
-                        <Text>
-                          <strong>Ignore Issues:</strong> {suggestion.description}
-                        </Text>
-                        <Text mt={2}>
-                          You can mark these issues as duplicates in Jira manually if needed.
-                        </Text>
-                      </Box>
-                    ) : null}
+                    {/* Display specific action details based on suggestion.action */}
                     <Text mt={4}>
                       You can proceed with this recommendation or choose to manually handle the issues.
                     </Text>
@@ -877,39 +923,13 @@ export default function HomePage() {
             </Button>
             {subtasks && subtasks.length > 0 ? null : actionType === 'merge' && selectedGroup ? (
               <ButtonGroup>
-                {suggestion?.action === 1 && suggestion.keepIssueKey && suggestion.deleteIssueKey ? (
-                  <Button
-                    colorScheme="green"
-                    onClick={() => handleAction('recommendation')}
-                    isLoading={actionInProgress}
-                  >
-                    Accept Recommendation
-                  </Button>
-                ) : suggestion?.action === 2 && suggestion.deleteIssueKeys && suggestion.createIssueSummary && suggestion.createIssueDescription ? (
-                  <Button
-                    colorScheme="green"
-                    onClick={() => handleAction('recommendation')}
-                    isLoading={actionInProgress}
-                  >
-                    Accept Recommendation
-                  </Button>
-                ) : suggestion?.action === 3 && suggestion.parentIssueKey && suggestion.subtaskIssueKey ? (
-                  <Button
-                    colorScheme="green"
-                    onClick={() => handleAction('recommendation')}
-                    isLoading={actionInProgress}
-                  >
-                    Accept Recommendation
-                  </Button>
-                ) : suggestion?.action === 4 ? (
-                  <Button
-                    colorScheme="green"
-                    onClick={() => handleAction('recommendation')}
-                    isLoading={actionInProgress}
-                  >
-                    Ignore Issues
-                  </Button>
-                ) : null}
+                <Button
+                  colorScheme="green"
+                  onClick={() => handleAction('recommendation')}
+                  isLoading={actionInProgress}
+                >
+                  Accept Recommendation
+                </Button>
                 <Button
                   colorScheme="blue"
                   onClick={() => handleAction('markAsDuplicate')}
