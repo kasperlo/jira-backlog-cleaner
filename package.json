@@ -6,28 +6,37 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "generate-embeddings": "ts-node scripts/generateEmbeddings.ts"
   },
   "dependencies": {
+    "@chakra-ui/progress": "^2.2.0",
     "@chakra-ui/react": "^2.10.1",
     "@emotion/react": "^11.13.3",
     "@emotion/styled": "^11.13.0",
+    "@pinecone-database/pinecone": "^3.0.3",
     "framer-motion": "^11.11.1",
+    "i": "^0.3.7",
     "jira-client": "^8.2.2",
+    "langchain": "^0.3.5",
     "next": "14.2.14",
-    "openai": "^4.67.1",
+    "npm": "^10.9.0",
+    "openai": "^4.68.4",
+    "pinecone-client": "^2.0.0",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "react-spinners": "^0.14.1"
   },
   "devDependencies": {
     "@types/jira-client": "^7.1.9",
-    "@types/node": "^20",
+    "@types/node": "^20.16.13",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "^8",
     "eslint-config-next": "14.2.14",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
   }
 }

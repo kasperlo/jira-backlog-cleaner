@@ -2,13 +2,21 @@
 
 import JiraClient from 'jira-client';
 
-const jira = new JiraClient({
-  protocol: 'https',
-  host: process.env.JIRA_HOST!,
-  username: process.env.JIRA_EMAIL!,
-  password: process.env.JIRA_API_TOKEN!,
-  apiVersion: '2',
-  strictSSL: true,
-});
+export interface JiraConfig {
+  jiraEmail: string;
+  jiraApiToken: string;
+  jiraBaseUrl: string;
+  projectKey: string;
+}
 
-export default jira;
+export const createJiraClient = (config: JiraConfig) => {
+  return new JiraClient({
+    protocol: 'https',
+    host: config.jiraBaseUrl.replace(/^https?:\/\//, ''), // Remove protocol
+    username: config.jiraEmail,
+    password: config.jiraApiToken,
+    apiVersion: '2',
+    strictSSL: true,
+  });
+};
+
