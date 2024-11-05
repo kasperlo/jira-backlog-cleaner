@@ -1,13 +1,7 @@
 // lib/jiraClient.ts
 
+import { JiraConfig } from '../types/types';
 import JiraClient from 'jira-client';
-
-export interface JiraConfig {
-  jiraEmail: string;
-  jiraApiToken: string;
-  jiraBaseUrl: string;
-  projectKey: string;
-}
 
 export const createJiraClient = (config: JiraConfig) => {
   return new JiraClient({

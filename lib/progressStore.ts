@@ -1,11 +1,6 @@
 // lib/progressStore.ts
 
-export type ProgressData = {
-  total: number;
-  completed: number;
-  status: 'idle' | 'processing' | 'completed' | 'error';
-  errorMessage?: string;
-};
+import { ProgressData } from "../types/types";
 
 declare global {
   // Declare a global variable to hold the progress data

@@ -1,7 +1,8 @@
 // pages/api/link-issue-to-epic.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { createJiraClient, JiraConfig } from '../../lib/jiraClient';
+import { createJiraClient } from '../../lib/jiraClient';
+import { JiraConfig } from '../../types/types';
 
 export default async function handler(
   req: NextApiRequest,

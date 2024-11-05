@@ -1,9 +1,10 @@
 // pages/api/update-embeddings.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { createJiraClient, JiraConfig } from '../../lib/jiraClient';
+import { createJiraClient } from '../../lib/jiraClient';
 import openai from '../../lib/openaiClient';
 import { Pinecone } from '@pinecone-database/pinecone';
+import { JiraConfig } from '../../types/types';
 
 interface JiraIssue {
   id: string;

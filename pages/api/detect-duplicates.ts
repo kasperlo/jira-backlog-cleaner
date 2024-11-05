@@ -2,8 +2,8 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pinecone from '../../lib/pineconeClient'; // Ensure correct import path
-import { JiraIssue, DuplicateGroup } from '../../types/types'; // Ensure correct import path
-import { createJiraClient, JiraConfig } from '../../lib/jiraClient';
+import { JiraIssue, DuplicateGroup, JiraConfig } from '../../types/types'; // Ensure correct import path
+import { createJiraClient } from '../../lib/jiraClient';
 
 interface FetchResponse {
   records: {

@@ -11,13 +11,7 @@ import {
     CircularProgressLabel,
 } from '@chakra-ui/react';
 import { useJira } from '../context/JiraContext';
-
-interface ProgressData {
-    total: number;
-    completed: number;
-    status: 'idle' | 'processing' | 'completed' | 'error';
-    errorMessage?: string;
-}
+import { ProgressData } from '../types/types';
 
 interface IssueProgressProps {
     onProcessingCompleted?: () => void;
