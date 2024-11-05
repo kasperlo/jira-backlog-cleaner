@@ -14,9 +14,9 @@ import {
     AlertIcon,
     Spinner,
 } from '@chakra-ui/react';
-import { useJira } from '../context/JiraContext'; // Ensure correct import path
 import axios from 'axios';
-import { JiraConfig } from '../lib/jiraClient';
+import { useJira } from '../context/JiraContext';
+import { JiraConfig } from '../types/types';
 
 const JiraConfigForm = () => {
     const { setConfig } = useJira();

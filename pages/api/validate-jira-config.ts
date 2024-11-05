@@ -1,7 +1,9 @@
 // pages/api/validate-jira-config.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { createJiraClient, JiraConfig } from '../../lib/jiraClient';
+import { createJiraClient } from '../../lib/jiraClient';
+import { JiraConfig } from '../../types/types';
+import { validateJiraConfig } from '../../utils/validateJiraConfig';
 
 interface ValidateJiraConfigResponse {
   success: boolean;
@@ -18,17 +20,9 @@ export default async function handler(
   }
 
   const { config } = req.body as { config: JiraConfig };
-
-  // Basic validation
-  if (
-    !config ||
-    typeof config.jiraEmail !== 'string' ||
-    typeof config.jiraApiToken !== 'string' ||
-    typeof config.jiraBaseUrl !== 'string' ||
-    typeof config.projectKey !== 'string' ||
-    config.projectKey.trim() === ''
-  ) {
-    return res.status(400).json({ success: false, message: 'Invalid Jira configuration provided.' });
+  const validationError = validateJiraConfig(config);
+  if (validationError) {
+    return res.status(400).json({ success: false, message: validationError });
   }
 
   const jira = createJiraClient(config);

@@ -2,15 +2,7 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getProgress } from '../../lib/progressStore';
-
-interface ProgressData {
-  total: number;
-  completed: number;
-  status: 'idle' | 'processing' | 'completed' | 'error';
-  errorMessage?: string;
-}
-
-// pages/api/progress.ts
+import { ProgressData } from '../../types/types';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse<ProgressData>) {
     if (req.method !== 'GET') {
