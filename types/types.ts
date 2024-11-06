@@ -22,12 +22,10 @@ export interface JiraIssue {
         issuetype: {
           name: string;
         };
-        parent?: {
-          key: string;
-        };
       };
     }>;
-    [key: string]: any; // Add any additional fields as necessary
+    embedding?: number[]; // Optional embedding field
+    similarity?: number;  // Optional similarity score
   };
 }
 
@@ -75,3 +73,35 @@ export interface PineconeVector {
   values: number[];
   metadata?: Record<string, any>;
 }
+
+export interface SuggestedIssue {
+  summary: string;
+  description: string;
+  issuetype: 'Story' | 'Task' | 'Sub-task';
+  explanation: string;
+}
+
+export interface RecordMetadata {
+  issueKey?: string;
+  summary?: string;
+  description?: string;
+  issuetype?: string;
+  parentKey?: string;
+  created?: string;
+  subtasks?: Array<{
+    id: string;
+    key: string;
+    summary?: string;
+    description?: string;
+    issuetype?: string;
+  }>;
+}
+
+export interface SimilarIssue {
+  key: string;
+  summary: string;
+  issuetype: string;
+  similarity: number;
+}
+
+
