@@ -12,13 +12,16 @@ import { IssuesList } from '../components/IssuesList';
 import { DuplicatesList } from '../components/DuplicatesList';
 import { ProgressIndicator } from '../components/ProgressIndicator';
 import { ConfirmationModal } from '../components/ConfirmationModal';
-import { DuplicateGroup } from '../types/types';
+import { DuplicateGroup, SuggestedIssue } from '../types/types';
 import { useEffect, useState } from 'react';
 import { IssueListSkeleton } from '@/components/IssueListSkeleton';
+import SuggestIssuesForm from '../components/SuggestIssuesForm';
+import SuggestedIssuesList from '../components/SuggestedIssuesList';
 
 export default function HomePage() {
   const { config } = useJira();
   const [mounted, setMounted] = useState(false);
+  const [suggestions, setSuggestions] = useState<SuggestedIssue[]>([]);
 
   const {
     issues,
@@ -67,6 +70,13 @@ export default function HomePage() {
         <JiraConfigForm />
       ) : (
         <>
+          <Heading size="md" mt={6}>
+            Suggest New Issues
+          </Heading>
+          <SuggestIssuesForm onSuggestionsReceived={setSuggestions} />
+          {suggestions.length > 0 && (
+            <SuggestedIssuesList suggestions={suggestions} setSuggestions={setSuggestions} />
+          )}
           <HStack spacing={4} justify="center">
             <Button
               colorScheme="teal"
