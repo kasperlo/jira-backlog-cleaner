@@ -5,6 +5,7 @@ import openai from '../../lib/openaiClient';
 import pinecone from '../../lib/pineconeClient';
 import { JiraConfig, SimilarIssue } from '../../types/types';
 import Ajv from 'ajv';
+import { retryWithExponentialBackoff } from '@/utils/retry';
 
 // Initialize AJV for JSON schema validation
 const ajv = new Ajv();
@@ -46,10 +47,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log(`Generating embedding for suggestion summary: ${summary}`);
 
     // Generate embedding for the suggestion summary
-    const embeddingResponse = await openai.embeddings.create({
-      model: 'text-embedding-3-large',
-      input: summary,
-    });
+    const embeddingResponse = await retryWithExponentialBackoff(() =>
+      openai.embeddings.create({
+        model: 'text-embedding-3-large',
+        input: summary,
+    })
+  );
 
     console.log('Embedding generated successfully for suggestion summary.');
 

@@ -6,6 +6,7 @@ import pinecone from '../../lib/pineconeClient';
 import { retrieveSimilarIssues } from '../../utils/retrieveSimilarIssues';
 import { SuggestedIssue, JiraConfig, JiraIssue } from '../../types/types';
 import Ajv from 'ajv';
+import { retryWithExponentialBackoff } from '@/utils/retry';
 
 // Initialize AJV for JSON schema validation
 const ajv = new Ajv();
@@ -47,10 +48,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('Generating embedding for project description:', projectDescription);
 
     // Generate embedding for the project description
-    const embeddingResponse = await openai.embeddings.create({
-      model: 'text-embedding-3-large', // Use the updated embedding model
-      input: projectDescription,
-    });
+    const embeddingResponse = await retryWithExponentialBackoff(() =>
+      openai.embeddings.create({
+        model: 'text-embedding-3-large',
+        input: projectDescription,
+      })
+    );
 
     console.log('Embedding generated successfully:', {
       model: embeddingResponse.model,
@@ -63,6 +66,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('Retrieving similar issues using Pinecone...');
     const similarIssues: JiraIssue[] = await retrieveSimilarIssues(queryEmbedding, 10);
     console.log(`Retrieved ${similarIssues.length} similar issues from Pinecone.`);
+
+    const similarityThreshold = 0.6;
+    const isRelevant = similarIssues.some((issue) => issue.fields.similarity! >= similarityThreshold);
+
+    if (!isRelevant) {
+      res.status(400).json({
+        error: 'The project description does not appear to be correct.',
+      });
+      return;
+    }
 
     // Log similarity scores
     similarIssues.forEach((issue, index) => {
@@ -189,11 +202,12 @@ ${exampleIssuesText}
       const filteredSuggestions: SuggestedIssue[] = [];
 
       for (const suggestion of suggestions) {
-        // Generate embedding for the suggestion summary
-        const suggestionEmbeddingResponse = await openai.embeddings.create({
-          model: 'text-embedding-3-large',
-          input: suggestion.summary,
-        });
+        const suggestionEmbeddingResponse = await retryWithExponentialBackoff(() =>
+          openai.embeddings.create({
+            model: 'text-embedding-3-large',
+            input: suggestion.summary,
+          })
+        );
 
         console.log(`Embedding generated for suggestion: ${suggestion.summary}`);
 

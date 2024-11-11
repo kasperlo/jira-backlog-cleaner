@@ -455,6 +455,61 @@ export function useActionHandlers(
     }
   };
 
+  const onExplain = async (issueKey: string): Promise<string> => {
+    try {
+      const response = await axios.post('/api/explain-issue', { issueKey, config });
+      return response.data.explanation;
+    } catch (error) {
+      console.error('Error fetching explanation:', error);
+      toast({
+        title: 'Failed to fetch explanation',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return 'Failed to fetch explanation.';
+    }
+  };
+
+  // 2. Fetch a suggested summary for an issue
+  const onSuggestSummary = async (issueKey: string): Promise<string> => {
+    try {
+      const response = await axios.post('/api/suggest-new-summary', { issueKey, config });
+      return response.data.suggestedSummary;
+    } catch (error) {
+      console.error('Error fetching suggested summary:', error);
+      toast({
+        title: 'Failed to fetch suggested summary',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return 'Failed to fetch suggested summary.';
+    }
+  };
+
+  // 3. Update the summary of an issue
+  const onEditSummary = async (issueKey: string, newSummary: string): Promise<void> => {
+    try {
+      await axios.post('/api/edit-issue-summary', { issueKey, newSummary, config });
+      toast({
+        title: 'Summary updated successfully',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      fetchIssuesData(); // Refresh issue data after edit
+    } catch (error) {
+      console.error('Error updating summary:', error);
+      toast({
+        title: 'Failed to update summary',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
   return {
     actionInProgress,
     selectedGroup,
@@ -468,5 +523,8 @@ export function useActionHandlers(
     handleAction,
     handleSubtaskAction,
     handleDeleteIssueResponse,
+    onExplain,
+    onSuggestSummary,
+    onEditSummary,
   };
 }

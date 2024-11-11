@@ -1,5 +1,7 @@
+// components/SuggestIssuesForm.tsx
+
 import React, { useState } from 'react';
-import { Box, Textarea, Button, VStack, useToast } from '@chakra-ui/react';
+import { Box, Textarea, Button, VStack, useToast, Heading } from '@chakra-ui/react';
 import { useJira } from '../context/JiraContext';
 import { SuggestedIssue } from '../types/types';
 
@@ -8,13 +10,13 @@ interface SuggestIssuesFormProps {
 }
 
 const SuggestIssuesForm: React.FC<SuggestIssuesFormProps> = ({ onSuggestionsReceived }) => {
-    const [projectDescription, setProjectDescription] = useState('');
+    const [localProjectDescription, setLocalProjectDescription] = useState('');
     const [loading, setLoading] = useState(false);
-    const { config } = useJira();
+    const { config, setProjectDescription } = useJira();
     const toast = useToast();
 
     const handleSubmit = async () => {
-        if (!projectDescription.trim()) {
+        if (!localProjectDescription.trim()) {
             toast({
                 title: 'Project description is empty.',
                 description: 'Please enter a project description.',
@@ -26,12 +28,13 @@ const SuggestIssuesForm: React.FC<SuggestIssuesFormProps> = ({ onSuggestionsRece
         }
 
         setLoading(true);
+        setProjectDescription(localProjectDescription); // Save to context
 
         try {
             const response = await fetch('/api/suggest-new-issues', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectDescription, config }),
+                body: JSON.stringify({ projectDescription: localProjectDescription, config }),
             });
 
             const data = await response.json();
@@ -62,15 +65,18 @@ const SuggestIssuesForm: React.FC<SuggestIssuesFormProps> = ({ onSuggestionsRece
     };
 
     return (
-        <Box my={4}>
+        <Box p={6} borderWidth="1px" borderRadius="md" mb={6}>
+            <Heading size="md" mb={4}>
+                Suggest New Issues
+            </Heading>
             <VStack spacing={4} align="stretch">
                 <Textarea
                     placeholder="Enter your project description here..."
-                    value={projectDescription}
-                    onChange={(e) => setProjectDescription(e.target.value)}
+                    value={localProjectDescription}
+                    onChange={(e) => setLocalProjectDescription(e.target.value)}
                     rows={6}
                 />
-                <Button colorScheme="teal" onClick={handleSubmit} isLoading={loading}>
+                <Button colorScheme="teal" onClick={handleSubmit} isLoading={loading} width="100%">
                     Get Issue Suggestions
                 </Button>
             </VStack>
