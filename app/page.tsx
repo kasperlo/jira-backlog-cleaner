@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Box, Heading, HStack, Button, Tooltip, Text } from '@chakra-ui/react';
+import { Box, Heading, HStack, Button, Tooltip, Text, VStack } from '@chakra-ui/react';
 import JiraConfigForm from '../components/JiraConfigForm';
 import { useJira } from '../context/JiraContext';
 import { useIssueProcessing } from '../hooks/useIssueProcessing';
@@ -10,7 +10,6 @@ import { useDuplicateDetection } from '../hooks/useDuplicateDetection';
 import { useActionHandlers } from '../hooks/useActionHandlers';
 import { IssuesList } from '../components/IssuesList';
 import { DuplicatesList } from '../components/DuplicatesList';
-import { ProgressIndicator } from '../components/ProgressIndicator';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { DuplicateGroup, SuggestedIssue } from '../types/types';
 import { useEffect, useState } from 'react';
@@ -52,6 +51,9 @@ export default function HomePage() {
     handleAction,
     handleSubtaskAction,
     handleDeleteIssueResponse,
+    onExplain,
+    onSuggestSummary,
+    onEditSummary,
   } = useActionHandlers(fetchIssuesData, issues, setDuplicates);
 
   useEffect(() => {
@@ -63,26 +65,28 @@ export default function HomePage() {
   }
 
   return (
-    <Box p={4}>
-      <Heading mb={4}>Jira Backlog Manager</Heading>
+    <Box p={6}>
+      <Heading mb={6}>Jira Backlog Manager</Heading>
 
       {!config ? (
         <JiraConfigForm />
       ) : (
         <>
-          <Heading size="md" mt={6}>
-            Suggest New Issues
-          </Heading>
           <SuggestIssuesForm onSuggestionsReceived={setSuggestions} />
+
           {suggestions.length > 0 && (
-            <SuggestedIssuesList suggestions={suggestions} setSuggestions={setSuggestions} />
+            <Box mb={6}>
+              <SuggestedIssuesList suggestions={suggestions} setSuggestions={setSuggestions} />
+            </Box>
           )}
-          <HStack spacing={4} justify="center">
+
+          <VStack spacing={6} align="center" mb={6}>
             <Button
               colorScheme="teal"
               onClick={startProcessing}
               isLoading={processing}
               isDisabled={processing}
+              width="60%"
             >
               {processing ? 'Processing...' : 'Process Issues'}
             </Button>
@@ -98,37 +102,47 @@ export default function HomePage() {
                 onClick={detectDuplicates}
                 isLoading={duplicateLoading}
                 disabled={issues.length === 0}
+                width="60%"
               >
                 Detect Duplicates
               </Button>
             </Tooltip>
-          </HStack>
+          </VStack>
 
           {duplicates.length > 0 && (
-            <DuplicatesList
-              duplicates={duplicates}
-              onMerge={(group: DuplicateGroup) => openConfirmationModal(group, 'merge')}
-              onNotDuplicate={(group: DuplicateGroup) => openConfirmationModal(group, 'notDuplicate')}
-              onIgnore={(group: DuplicateGroup) => openConfirmationModal(group, 'ignore')}
-              actionInProgress={actionInProgress}
-            />
+            <Box mb={6}>
+              <DuplicatesList
+                duplicates={duplicates}
+                onMerge={(group: DuplicateGroup) => openConfirmationModal(group, 'merge')}
+                onNotDuplicate={(group: DuplicateGroup) => openConfirmationModal(group, 'notDuplicate')}
+                onIgnore={(group: DuplicateGroup) => openConfirmationModal(group, 'ignore')}
+                onExplain={onExplain}
+                onSuggestSummary={onSuggestSummary}
+                onEditSummary={onEditSummary}
+                actionInProgress={actionInProgress}
+              />
+            </Box>
           )}
 
-          <Heading size="md" mt={6}>
-            All Issues
-          </Heading>
-          {processing ? (
-            // Render the skeleton list when processing
-            <IssueListSkeleton itemCount={10} /> // Adjust itemCount as needed
-          ) : issues.length === 0 ? (
-            <Text>No issues found.</Text>
-          ) : (
-            <IssuesList
-              issues={issues}
-              onDelete={handleDeleteIssueResponse}
-              actionInProgress={actionInProgress}
-            />
-          )}
+          <Box>
+            <Heading size="md" mt={6} mb={4}>
+              All Issues
+            </Heading>
+            {processing ? (
+              <IssueListSkeleton itemCount={10} />
+            ) : issues.length === 0 ? (
+              <Text>No issues found.</Text>
+            ) : (
+              <IssuesList
+                issues={issues}
+                onDelete={handleDeleteIssueResponse}
+                onExplain={onExplain}
+                onSuggestSummary={onSuggestSummary}
+                onEditSummary={onEditSummary}
+                actionInProgress={actionInProgress}
+              />
+            )}
+          </Box>
 
           <ConfirmationModal
             isOpen={isOpen}

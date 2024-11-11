@@ -5,6 +5,7 @@ import { createJiraClient } from '../../lib/jiraClient';
 import openai from '../../lib/openaiClient';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { JiraConfig } from '../../types/types';
+import { retryWithExponentialBackoff } from '@/utils/retry';
 
 interface JiraIssue {
   id: string;
@@ -65,10 +66,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log(`fetched ${issue.key} from jira`);
 
     const text = `${issue.fields.summary}\n${issue.fields.description || ''}`;
-    const embeddingResponse = await openai.embeddings.create({
-      model: 'text-embedding-3-large',
-      input: text,
-    });
+      const embeddingResponse = await retryWithExponentialBackoff(() =>
+        openai.embeddings.create({
+          model: 'text-embedding-3-large',
+          input: text,
+      })
+    );
     const embedding = embeddingResponse.data[0].embedding;
 
     // Log embedding creation

@@ -1,32 +1,38 @@
 // components/IssueList.tsx
 
-import { List, ListItem, Text, Button } from '@chakra-ui/react';
+import { List } from '@chakra-ui/react';
 import { JiraIssue } from '../types/types';
+import { IssueItem } from './IssueItem';
 
 interface IssueListProps {
     issues: JiraIssue[];
-    onAction?: (issue: JiraIssue) => void;
-    actionLabel?: string;
-    isLoading?: boolean;
+    onDelete: (issueKey: string) => Promise<void>;
+    onExplain: (issueKey: string) => Promise<string>;
+    onSuggestSummary: (issueKey: string) => Promise<string>;
+    onEditSummary: (issueKey: string, newSummary: string) => Promise<void>;
+    actionInProgress?: boolean;
 }
 
-export function IssueList({ issues, onAction, actionLabel, isLoading }: IssueListProps) {
+export function IssueList({
+    issues,
+    onDelete,
+    onExplain,
+    onSuggestSummary,
+    onEditSummary,
+    actionInProgress,
+}: IssueListProps) {
     return (
         <List spacing={3} mt={2}>
             {issues.map((issue) => (
-                <ListItem key={issue.id} borderWidth="1px" borderRadius="md" p={4}>
-                    <Text fontWeight="bold">
-                        {issue.key}: {issue.fields.summary}
-                    </Text>
-                    <Text fontSize="sm" color="gray.500">
-                        Type: {issue.fields.issuetype.name} | Created: {new Date(issue.fields.created).toLocaleDateString()}
-                    </Text>
-                    {onAction && actionLabel && (
-                        <Button mt={2} onClick={() => onAction(issue)} isLoading={isLoading}>
-                            {actionLabel}
-                        </Button>
-                    )}
-                </ListItem>
+                <IssueItem
+                    key={issue.id}
+                    issue={issue}
+                    onDelete={onDelete}
+                    onExplain={onExplain}
+                    onSuggestSummary={onSuggestSummary}
+                    onEditSummary={onEditSummary}
+                    actionInProgress={actionInProgress}
+                />
             ))}
         </List>
     );

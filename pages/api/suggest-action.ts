@@ -5,6 +5,7 @@ import openai from '../../lib/openaiClient';
 import Ajv from 'ajv';
 import { ActionSuggestion, JiraIssue } from '../../types/types';
 import JiraClient from 'jira-client';
+import { retryWithExponentialBackoff } from '@/utils/retry';
 
 const ajv = new Ajv();
 
@@ -142,12 +143,14 @@ Ensure the JSON is the only output.
 
   while (attempt < maxRetries) {
     try {
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 500, // Adjust as needed
-        temperature: 0,
-      });
+      const response = await retryWithExponentialBackoff(() =>
+        openai.chat.completions.create({
+          model: 'gpt-4',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 500,
+          temperature: 0,
+        })
+      );
 
       const text = response.choices[0]?.message?.content?.trim();
 

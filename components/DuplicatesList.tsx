@@ -1,7 +1,7 @@
 // components/DuplicatesList.tsx
 
 import { Box, Heading, Text, ButtonGroup, Button } from '@chakra-ui/react';
-import { DuplicateGroup, JiraIssue } from '../types/types';
+import { DuplicateGroup } from '../types/types';
 import { IssueList } from './IssueList';
 
 interface DuplicatesListProps {
@@ -9,6 +9,9 @@ interface DuplicatesListProps {
     onMerge: (group: DuplicateGroup) => void;
     onNotDuplicate: (group: DuplicateGroup) => void;
     onIgnore: (group: DuplicateGroup) => void;
+    onExplain: (issueKey: string) => Promise<string>;
+    onSuggestSummary: (issueKey: string) => Promise<string>;
+    onEditSummary: (issueKey: string, newSummary: string) => Promise<void>;
     actionInProgress: boolean;
 }
 
@@ -17,6 +20,9 @@ export function DuplicatesList({
     onMerge,
     onNotDuplicate,
     onIgnore,
+    onExplain,
+    onSuggestSummary,
+    onEditSummary,
     actionInProgress,
 }: DuplicatesListProps) {
     return (
@@ -28,7 +34,14 @@ export function DuplicatesList({
                     <Text fontStyle="italic" mb={2}>
                         {dupGroup.explanation}
                     </Text>
-                    <IssueList issues={dupGroup.group} />
+                    <IssueList
+                        issues={dupGroup.group}
+                        onDelete={() => Promise.resolve()} // Dummy function since delete is not needed
+                        onExplain={onExplain}
+                        onSuggestSummary={onSuggestSummary}
+                        onEditSummary={onEditSummary}
+                        actionInProgress={actionInProgress}
+                    />
                     <ButtonGroup mt={4}>
                         <Button
                             colorScheme="blue"

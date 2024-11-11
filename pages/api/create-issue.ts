@@ -4,6 +4,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import JiraClient from 'jira-client';
 import openai from '../../lib/openaiClient';
 import pinecone from '../../lib/pineconeClient';
+import { retryWithExponentialBackoff } from '@/utils/retry';
 
 interface Suggestion {
   summary: string;
@@ -60,10 +61,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Generate embedding using text-embedding-3-large
     const text = `${suggestion.summary}\n${suggestion.description}`;
-    const embeddingResponse = await openai.embeddings.create({
-      model: 'text-embedding-3-large', // Updated model
+    const embeddingResponse = await retryWithExponentialBackoff(() => 
+    openai.embeddings.create({
+      model: 'text-embedding-3-large',
       input: text,
-    });
+    })
+  );
     const embedding = embeddingResponse.data[0].embedding;
 
     // Upsert to Pinecone
