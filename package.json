@@ -16,6 +16,7 @@
     "@emotion/react": "^11.13.3",
     "@emotion/styled": "^11.13.0",
     "@pinecone-database/pinecone": "^3.0.3",
+    "axios": "^1.7.7",
     "framer-motion": "^11.11.1",
     "i": "^0.3.7",
     "jira-client": "^8.2.2",

@@ -20,7 +20,7 @@ import {
     ModalBody,
     ModalFooter,
 } from '@chakra-ui/react';
-import { SuggestedIssue, SimilarIssue, JiraConfig } from '../types/types';
+import { SuggestedIssue, SimilarIssue } from '../types/types';
 import { useJira } from '../context/JiraContext';
 
 interface SuggestedIssuesListProps {

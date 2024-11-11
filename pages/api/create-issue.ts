@@ -6,12 +6,6 @@ import openai from '../../lib/openaiClient';
 import pinecone from '../../lib/pineconeClient';
 import { retryWithExponentialBackoff } from '@/utils/retry';
 
-interface Suggestion {
-  summary: string;
-  description: string;
-  issuetype: string;
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');

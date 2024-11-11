@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Box, Heading, HStack, Button, Tooltip, Text, VStack } from '@chakra-ui/react';
+import { Box, Heading, Button, Tooltip, Text, VStack } from '@chakra-ui/react';
 import JiraConfigForm from '../components/JiraConfigForm';
 import { useJira } from '../context/JiraContext';
 import { useIssueProcessing } from '../hooks/useIssueProcessing';
@@ -25,9 +25,6 @@ export default function HomePage() {
   const {
     issues,
     processing,
-    progress,
-    progressPercentage,
-    error,
     startProcessing,
     fetchIssuesData,
   } = useIssueProcessing();
