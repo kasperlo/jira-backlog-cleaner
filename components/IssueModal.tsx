@@ -55,7 +55,7 @@ export function IssueModal({
 
     return (
         <>
-            <Button onClick={onOpen}>Explore Issue</Button>
+            <Button onClick={onOpen}>Expand Issue</Button>
             <Modal isOpen={isOpen} onClose={onClose} size="lg">
                 <ModalOverlay />
                 <ModalContent>
