@@ -7,32 +7,6 @@ import { Pinecone } from '@pinecone-database/pinecone';
 import { JiraConfig } from '../../types/types';
 import { retryWithExponentialBackoff } from '@/utils/retry';
 
-interface JiraIssue {
-  id: string;
-  key: string;
-  fields: {
-    summary: string;
-    description?: string;
-    issuetype: {
-      name: string;
-    };
-    parent?: {
-      key: string;
-    };
-  };
-}
-
-interface VectorMetadata {
-  id: string;
-  values: number[];
-  sparseValues?: any;
-  metadata?: Record<string, any>;
-}
-
-interface FetchResponse {
-  vectors: Record<string, VectorMetadata>;
-}
-
 const pinecone = new Pinecone();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -97,10 +71,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log(`updated vector embedding for ${issue.key} in pinecone`);
 
     res.status(200).json({ message: 'Embedding updated successfully.' });
-  } catch (error: any) {
-    console.error('Error updating embedding:', error.response?.data || error);
-    res.status(500).json({
-      error: error.response?.data?.errorMessages?.[0] || 'Failed to update embedding.',
-    });
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'response' in error) {
+      const axiosError = error as {
+        response: {
+          data?: {
+            errorMessages?: string[];
+          };
+        };
+      };
+      console.error('Error updating embedding:', axiosError.response.data || error);
+      res.status(500).json({
+        error:
+          axiosError.response.data?.errorMessages?.[0] || 'Failed to update embedding.',
+      });
+    } else if (error instanceof Error) {
+      console.error('Error updating embedding:', error.message);
+      res.status(500).json({ error: error.message });
+    } else {
+      console.error('Unknown error:', error);
+      res.status(500).json({ error: 'Failed to update embedding.' });
+    }
   }
+  
 }

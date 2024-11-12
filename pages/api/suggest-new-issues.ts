@@ -4,7 +4,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import openai from '../../lib/openaiClient';
 import pinecone from '../../lib/pineconeClient';
 import { retrieveSimilarIssues } from '../../utils/retrieveSimilarIssues';
-import { SuggestedIssue, JiraConfig, JiraIssue } from '../../types/types';
+import { SuggestedIssue, JiraIssue } from '../../types/types';
 import Ajv from 'ajv';
 import { retryWithExponentialBackoff } from '@/utils/retry';
 
@@ -90,7 +90,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Format existing issues as JSON objects for the prompt
     const existingIssuesText = similarIssues
-      .map((issue: any) => `
+      .map((issue: JiraIssue) => `
 {
   "summary": "${issue.fields.summary.replace(/"/g, '\\"')}",
   "description": "${issue.fields.description ? issue.fields.description.replace(/"/g, '\\"') : ''}",
@@ -101,7 +101,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Optionally, include examples to guide GPT-4
     const exampleIssuesText = similarIssues.slice(0, 2)
-      .map((issue: any) => `
+      .map((issue: JiraIssue) => `
 {
   "summary": "${issue.fields.summary.replace(/"/g, '\\"')}",
   "description": "${issue.fields.description ? issue.fields.description.replace(/"/g, '\\"') : ''}",
@@ -246,12 +246,8 @@ ${exampleIssuesText}
       res.status(500).json({ error: 'Failed to parse OpenAI response.' });
     }
 
-  } catch (error: any) {
-    if (error.response) {
-      console.error('OpenAI API Error:', error.response.status, error.response.data);
-    } else {
-      console.error('Error suggesting new issues:', error.message || error);
-    }
-    res.status(500).json({ error: 'Failed to suggest new issues.' });
-  }
+  } catch (err: unknown) {
+    console.error('Error parsing or validating OpenAI response:', err);
+    res.status(500).json({ error: 'Failed to parse OpenAI response.' });
+  }  
 }

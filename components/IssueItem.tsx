@@ -5,11 +5,9 @@ import {
     Text,
     VStack,
     HStack,
-    IconButton,
     useDisclosure,
 } from '@chakra-ui/react';
 import { JiraIssue } from '../types/types';
-import { EditIcon } from '@chakra-ui/icons';
 import { IssueModal } from './IssueModal';
 import { useState } from 'react';
 
@@ -28,9 +26,8 @@ export function IssueItem({
     onExplain,
     onSuggestSummary,
     onEditSummary,
-    actionInProgress,
 }: IssueItemProps) {
-    const { isOpen, onOpen, onClose } = useDisclosure();
+    const { isOpen, onClose } = useDisclosure();
     const [explanation, setExplanation] = useState('');
     const [suggestedSummary, setSuggestedSummary] = useState('');
     const [isFetching, setIsFetching] = useState(false);

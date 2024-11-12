@@ -87,13 +87,14 @@ ${issue.fields.description || 'No description provided.'}
     }
 
     res.status(200).json({ suggestedSummary });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error suggesting new summary:', error);
     res.status(500).json({
       error:
-        error.response?.data?.errorMessages?.[0] ||
-        error.message ||
-        'Failed to generate suggested summary.',
+        error instanceof Error
+          ? error.message
+          : 'Failed to generate suggested summary.',
     });
   }
+  
 }

@@ -5,12 +5,7 @@ import JiraClient from 'jira-client';
 import openai from '../../lib/openaiClient';
 import pinecone from '../../lib/pineconeClient';
 import { retryWithExponentialBackoff } from '@/utils/retry';
-
-interface Suggestion {
-  summary: string;
-  description: string;
-  issuetype: string;
-}
+import { IssueData } from '@/types/types';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -44,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   });
 
   try {
-    const issueData: any = {
+    const issueData: IssueData = {
       fields: {
         project: { key: config.projectKey },
         summary: suggestion.summary,
@@ -88,7 +83,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ]);
 
     res.status(200).json({ message: 'Issue created successfully.', issueKey: issue.key });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating issue:', error);
     res.status(500).json({ error: 'Failed to create issue.' });
   }

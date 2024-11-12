@@ -21,7 +21,7 @@ export default async function handler(
     return;
   }
 
-  // Validate JiraConfig structure (optional but recommended)
+  // Validate JiraConfig structure
   const { jiraEmail, jiraApiToken, jiraBaseUrl, projectKey } = config as JiraConfig;
   if (!jiraEmail || !jiraApiToken || !jiraBaseUrl || !projectKey) {
     return res.status(400).json({ error: 'Incomplete Jira configuration.' });
@@ -57,17 +57,26 @@ export default async function handler(
     // Update the 'Epic Link' field on the issue
     await jiraClient.updateIssue(issueKey, {
       fields: {
-        [epicLinkField.id]: epicKey, // Use the correct field ID
+        [epicLinkField.id]: epicKey,
       },
     });
 
     console.log(`Issue ${issueKey} linked to Epic ${epicKey} successfully.`);
 
-    res.status(200).json({ message: `Issue ${issueKey} linked to Epic ${epicKey} successfully.` });
-  } catch (error: any) {
-    console.error(`Error linking issue ${issueKey} to epic ${epicKey}:`, error.response?.data || error);
+    res
+      .status(200)
+      .json({ message: `Issue ${issueKey} linked to Epic ${epicKey} successfully.` });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : `Failed to link issue ${issueKey} to epic ${epicKey}.`;
+    console.error(
+      `Error linking issue ${issueKey} to epic ${epicKey}:`,
+      error instanceof Error ? error.message : error
+    );
     res.status(500).json({
-      error: error.response?.data?.errorMessages?.[0] || `Failed to link issue ${issueKey} to epic ${epicKey}.`,
+      error: errorMessage,
     });
   }
 }

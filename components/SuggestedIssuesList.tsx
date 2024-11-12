@@ -20,7 +20,7 @@ import {
     ModalBody,
     ModalFooter,
 } from '@chakra-ui/react';
-import { SuggestedIssue, SimilarIssue, JiraConfig } from '../types/types';
+import { SuggestedIssue, SimilarIssue } from '../types/types';
 import { useJira } from '../context/JiraContext';
 
 interface SuggestedIssuesListProps {
@@ -59,11 +59,12 @@ const SuggestedIssuesList: React.FC<SuggestedIssuesListProps> = ({ suggestions, 
 
             // Remove the created issue from the suggestions list
             setSuggestions((prev) => prev.filter((_, i) => i !== index));
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error creating issue:', error);
             toast({
                 title: 'Error',
-                description: error.message || 'Failed to create issue.',
+                description:
+                    error instanceof Error ? error.message : 'Failed to create issue.',
                 status: 'error',
                 duration: 5000,
                 isClosable: true,
@@ -102,16 +103,18 @@ const SuggestedIssuesList: React.FC<SuggestedIssuesListProps> = ({ suggestions, 
             }
 
             setSimilarIssues(data.similarIssues);
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error fetching similar issues:', error);
             toast({
                 title: 'Error',
-                description: error.message || 'Failed to fetch similar issues.',
+                description:
+                    error instanceof Error ? error.message : 'Failed to fetch similar issues.',
                 status: 'error',
                 duration: 5000,
                 isClosable: true,
             });
-        } finally {
+        }
+        finally {
             setIsLoading(false);
         }
     };

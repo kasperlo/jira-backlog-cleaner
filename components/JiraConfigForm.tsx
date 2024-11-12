@@ -32,7 +32,7 @@ const JiraConfigForm = () => {
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setLocalConfig({
             ...localConfig,
-            [e.target.name]: e.target.value.trim(), // Trim whitespace
+            [e.target.name]: e.target.value.trim(),
         });
     };
 
@@ -41,13 +41,18 @@ const JiraConfigForm = () => {
         setError('');
 
         // Basic validation
-        if (!localConfig.jiraEmail || !localConfig.jiraApiToken || !localConfig.jiraBaseUrl || !localConfig.projectKey) {
+        if (
+            !localConfig.jiraEmail ||
+            !localConfig.jiraApiToken ||
+            !localConfig.jiraBaseUrl ||
+            !localConfig.projectKey
+        ) {
             setError('All fields are required.');
             return;
         }
 
-        // Optional: Validate project key format (e.g., uppercase letters)
-        const projectKeyPattern = /^[A-Z]+$/; // Adjust regex as needed
+        // Optional: Validate project key format
+        const projectKeyPattern = /^[A-Z]+$/;
         if (!projectKeyPattern.test(localConfig.projectKey)) {
             setError('Project key must contain only uppercase letters.');
             return;
@@ -57,16 +62,22 @@ const JiraConfigForm = () => {
 
         try {
             // Call the validation API route
-            const response = await axios.post('/api/validate-jira-config', { config: localConfig });
+            const response = await axios.post('/api/validate-jira-config', {
+                config: localConfig,
+            });
 
             if (response.data.success) {
                 setConfig(localConfig);
             } else {
                 setError(response.data.message);
             }
-        } catch (err: any) {
-            console.error('Error validating Jira configuration:', err.response?.data || err.message || err);
-            setError(err.response?.data?.message || 'Failed to validate Jira configuration.');
+        } catch (err: unknown) {
+            const errorMessage =
+                err instanceof Error
+                    ? err.message
+                    : 'Failed to validate Jira configuration.';
+            console.error('Error validating Jira configuration:', errorMessage);
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -127,7 +138,12 @@ const JiraConfigForm = () => {
                         </Alert>
                     )}
 
-                    <Button type="submit" colorScheme="teal" width="full" isDisabled={loading}>
+                    <Button
+                        type="submit"
+                        colorScheme="teal"
+                        width="full"
+                        isDisabled={loading}
+                    >
                         {loading ? <Spinner size="sm" /> : 'Save Configuration'}
                     </Button>
                 </VStack>

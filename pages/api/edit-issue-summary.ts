@@ -45,7 +45,7 @@ export default async function handler(
 
   const jira = new JiraClient({
     protocol: 'https',
-    host: config.jiraBaseUrl.replace(/^https?:\/\//, ''), // Remove protocol
+    host: config.jiraBaseUrl.replace(/^https?:\/\//, ''),
     username: config.jiraEmail,
     password: config.jiraApiToken,
     apiVersion: '2',
@@ -59,8 +59,9 @@ export default async function handler(
       },
     });
     res.status(200).json({ message: `Issue ${issueKey} summary updated successfully.` });
-  } catch (error: any) {
-    console.error('Error updating issue summary:', error.message || error);
-    res.status(500).json({ error: error.message || 'Failed to update issue summary.' });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update issue summary.';
+    console.error('Error updating issue summary:', errorMessage);
+    res.status(500).json({ error: errorMessage });
   }
 }

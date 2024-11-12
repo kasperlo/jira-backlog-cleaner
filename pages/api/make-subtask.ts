@@ -2,6 +2,7 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import JiraClient from 'jira-client';
+import { ProjectMeta } from '@/types/types';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -76,13 +77,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Find the issue type ID for 'Sub-task' or 'Deloppgave'
     let subtaskIssueTypeId: string | undefined;
-    const projectMeta = createMeta.projects.find(
-      (proj: any) => proj.key === projectKey
+    const projectMeta = (createMeta.projects as ProjectMeta[]).find(
+      (proj) => proj.key === projectKey
     );
 
     if (projectMeta) {
       const subtaskIssueType = projectMeta.issuetypes.find(
-        (it: any) => it.name.toLowerCase() === 'sub-task' || it.name.toLowerCase() === 'deloppgave'
+        (it) =>
+          it.name.toLowerCase() === 'sub-task' ||
+          it.name.toLowerCase() === 'deloppgave'
       );
       if (subtaskIssueType) {
         subtaskIssueTypeId = subtaskIssueType.id;
@@ -120,15 +123,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       message: 'Issue converted to subtask successfully.',
       newSubtaskKey: newSubtask.key,
     });
-  } catch (error: any) {
-    // Handle errors from Jira API
-    if (error.response) {
-      const { status, data } = error.response;
-      res.status(status).json({ error: data.errorMessages?.[0] || data.message || 'Unknown error from Jira API.' });
-      console.error(`Jira API Error: ${status} - ${data.errorMessages?.[0] || data.message}`);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      // Handle known errors
+      res.status(500).json({ error: error.message });
+      console.error('Internal server error while promoting to Epic:', error.message);
     } else {
       res.status(500).json({ error: 'Internal server error while promoting to Epic.' });
-      console.error('Internal server error while promoting to Epic:', error.message);
+      console.error('Internal server error while promoting to Epic:', error);
     }
-  }
+  }  
 }

@@ -1,6 +1,6 @@
 // components/IssueListSkeleton.tsx
 
-import { List, ListItem, Skeleton, SkeletonText, Box } from '@chakra-ui/react';
+import { List, ListItem, Skeleton, SkeletonText } from '@chakra-ui/react';
 
 interface IssueListSkeletonProps {
     itemCount: number;

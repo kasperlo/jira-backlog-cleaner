@@ -3,9 +3,16 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import openai from '../../lib/openaiClient';
 import pinecone from '../../lib/pineconeClient';
-import { JiraConfig, SimilarIssue } from '../../types/types';
+import { SimilarIssue } from '../../types/types';
 import Ajv from 'ajv';
 import { retryWithExponentialBackoff } from '@/utils/retry';
+
+interface ErrorWithResponse {
+  response: {
+    status: number;
+    data: unknown;
+  };
+}
 
 // Initialize AJV for JSON schema validation
 const ajv = new Ajv();
@@ -51,8 +58,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       openai.embeddings.create({
         model: 'text-embedding-3-large',
         input: summary,
-    })
-  );
+      })
+    );
 
     console.log('Embedding generated successfully for suggestion summary.');
 
@@ -63,7 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const similarIssuesResponse = await pinecone.index('masterz-3072').query({
       vector: suggestionEmbedding,
       topK: 3,
-      includeMetadata: true, // Changed to true to retrieve metadata
+      includeMetadata: true,
       includeValues: false,
     });
 
@@ -79,7 +86,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       issueKey: string;
       summary: string;
       issuetype: string;
-      // Add other metadata fields if necessary
     }
 
     const similarIssues: SimilarIssue[] = similarIssuesResponse.matches.map((match) => {
@@ -103,11 +109,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     res.status(200).json({ similarIssues });
-  } catch (error: any) {
-    if (error.response) {
-      console.error('OpenAI API Error:', error.response.status, error.response.data);
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'response' in error) {
+      const axiosError = error as ErrorWithResponse;
+      console.error(
+        'OpenAI API Error:',
+        axiosError.response.status,
+        axiosError.response.data
+      );
+    } else if (error instanceof Error) {
+      console.error('Error retrieving similar issues:', error.message);
     } else {
-      console.error('Error retrieving similar issues:', error.message || error);
+      console.error('Unknown error:', error);
     }
     res.status(500).json({ error: 'Failed to retrieve similar issues.' });
   }

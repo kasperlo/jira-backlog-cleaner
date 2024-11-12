@@ -4,7 +4,6 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import openai from '../../lib/openaiClient';
 import Ajv from 'ajv';
 import { ActionSuggestion, JiraIssue } from '../../types/types';
-import JiraClient from 'jira-client';
 import { retryWithExponentialBackoff } from '@/utils/retry';
 
 const ajv = new Ajv();
@@ -55,30 +54,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
-  // Initialize Jira client with user-provided config
-  const jira = new JiraClient({
-    protocol: 'https',
-    host: config.jiraBaseUrl.replace(/^https?:\/\//, ''), // Remove protocol
-    username: config.jiraEmail,
-    password: config.jiraApiToken,
-    apiVersion: '2',
-    strictSSL: true,
-  });
-
   try {
-    const suggestion = await getActionSuggestion(issues, jira);
+    const suggestion = await getActionSuggestion(issues);
     validateSuggestion(suggestion);
     console.log('Action suggestion generated successfully:', suggestion);
     res.status(200).json({ suggestion });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in /api/suggest-action:', error);
     res.status(500).json({
-      error: error.message || 'Failed to get action suggestion.',
+      error: error instanceof Error ? error.message : 'Failed to get action suggestion.',
     });
   }
+  
 }
 
-async function getActionSuggestion(issues: JiraIssue[], jira: JiraClient): Promise<ActionSuggestion> {
+async function getActionSuggestion(issues: JiraIssue[]): Promise<ActionSuggestion> {
   const issueSummaries = issues.map(
     (issue) => `${issue.key}: ${issue.fields.summary}`
   ).join('\n');
@@ -191,12 +181,15 @@ Ensure the JSON is the only output.
       // No need to assign default arrays since the response includes only relevant fields
 
       return suggestion as ActionSuggestion; // Type assertion to assist TypeScript
-    } catch (error: any) {
+    } catch (error: unknown) {
       attempt++;
       console.error(`Attempt ${attempt} - Error during OpenAI processing:`, error);
-
-      if (attempt >= maxRetries) {
-        throw new Error(error.message || 'Failed to generate action suggestion after multiple attempts.');
+    
+      if (error instanceof Error && attempt >= maxRetries) {
+        throw new Error(
+          error.message ||
+            'Failed to generate action suggestion after multiple attempts.'
+        );
       }
 
       console.log(`Retrying in ${delayMs / 1000} seconds...`);

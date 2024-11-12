@@ -44,9 +44,6 @@ export default async function handler(
     const issueResponse = await jiraClient.findIssue(issueKey, '', 'summary,description');
     const issue: JiraIssue = issueResponse as JiraIssue;
 
-    // Optionally, log the issue to verify its structure
-    console.log('Fetched Issue:', issue);
-
     // Fetch all issues for context
     const allIssues: JiraIssue[] = await fetchAllIssues(config);
 
@@ -64,7 +61,7 @@ You are a project management assistant. Provide a concise and simple explanation
 
 I am confused about the target issue and what it really means. What is the real task, and why is it important (if it is important) within this project. 
 
-Pleas explain it to me in simple terms, using a maximum of 5 sentences (preferrably less if possible).
+Please explain it to me in simple terms, using a maximum of 5 sentences (preferably less if possible).
 
 ### Project Description:
 ${projectDescription || 'No project description provided.'}
@@ -81,12 +78,12 @@ Description: ${issue.fields.description || 'No description provided.'}
 
     // Call OpenAI's GPT-4 API
     const response = await retryWithExponentialBackoff(() =>
-        openai.chat.completions.create({
-            model: 'gpt-4',
-            messages: [{ role: 'user', content: prompt }],
-            max_tokens: 200,
-            temperature: 0.7,
-        })
+      openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 200,
+        temperature: 0.7,
+      })
     );
 
     const explanation = response.choices[0]?.message?.content?.trim();
@@ -96,13 +93,10 @@ Description: ${issue.fields.description || 'No description provided.'}
     }
 
     res.status(200).json({ explanation });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error explaining issue:', error);
     res.status(500).json({
-      error:
-        error.response?.data?.errorMessages?.[0] ||
-        error.message ||
-        'Failed to generate issue explanation.',
+      error: error instanceof Error ? error.message : 'Failed to generate issue explanation.',
     });
   }
 }

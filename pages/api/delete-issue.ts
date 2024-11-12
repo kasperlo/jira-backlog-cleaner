@@ -2,6 +2,7 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import JiraClient from 'jira-client';
+import { JiraIssue } from '@/types/types';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -51,7 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (issue.fields.subtasks && issue.fields.subtasks.length > 0) {
       if (!action) {
         // If no action specified, return the subtasks and prompt user
-        const subtasks = issue.fields.subtasks.map((subtask: any) => ({
+        const subtasks = issue.fields.subtasks.map((subtask: JiraIssue) => ({
           key: subtask.key,
           summary: subtask.fields.summary,
         }));
@@ -91,8 +92,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ? `Issue '${issueKey}' has been deleted and its subtasks have been converted to separate tasks.`
           : `Issue '${issueKey}' has been deleted successfully.`,
     });
-  } catch (error: any) {
-    console.error('Error deleting Jira issue:', error.message || error);
+  } catch (error: unknown) {
+    console.error(
+      'Error deleting Jira issue:',
+      error instanceof Error ? error.message : 'Unknown error'
+    );
     res.status(500).json({ error: 'Failed to delete Jira issue.' });
   }
 }

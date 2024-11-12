@@ -1,8 +1,12 @@
 // pages/api/issues.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { JiraConfig, JiraIssue } from '../../types/types';
-import { fetchAllIssues, generateEmbeddings, upsertEmbeddingsToPinecone } from '../../utils/issueProcessor';
+import { JiraIssue } from '../../types/types';
+import {
+  fetchAllIssues,
+  generateEmbeddings,
+  upsertEmbeddingsToPinecone,
+} from '../../utils/issueProcessor';
 import {
   resetProgress,
   updateProgress,
@@ -11,16 +15,7 @@ import {
   getProgress,
 } from '../../lib/progressStore';
 
-export {}; // Ensure this file is treated as a module
-
-declare global {
-  var processedIssuesList: JiraIssue[];
-}
-
-// Initialize 'processedIssuesList' if it doesn't exist
-if (typeof globalThis.processedIssuesList === 'undefined') {
-  globalThis.processedIssuesList = [];
-}
+let processedIssuesList: JiraIssue[] = []; // Module-level variable
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { config, action } = req.body;
@@ -40,7 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (action === 'fetchProcessedIssues') {
     // Return the list of processed issues
-    res.status(200).json({ issues: globalThis.processedIssuesList });
+    res.status(200).json({ issues: processedIssuesList });
     return;
   }
 
@@ -65,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Reset progress and processed issues list
       resetProgress(issues.length);
-      globalThis.processedIssuesList = []; // Reset the list
+      processedIssuesList = []; // Reset the list
 
       // Start asynchronous processing
       (async () => {
@@ -75,7 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           // Update progress as embeddings are generated
           for (let i = 0; i < vectors.length; i++) {
             updateProgress();
-            globalThis.processedIssuesList.push(issues[i]);
+            processedIssuesList.push(issues[i]);
           }
 
           await upsertEmbeddingsToPinecone(vectors);
@@ -83,17 +78,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           // Complete progress
           completeProgress();
           console.log('Processing completed.');
-        } catch (processingError: any) {
+        } catch (processingError: unknown) {
           console.error('Error during embedding processing:', processingError);
-          setError(processingError.message || 'Unknown error during processing.');
+          setError(
+            processingError instanceof Error
+              ? processingError.message
+              : 'Unknown error during processing.'
+          );
         }
       })();
 
       // Respond immediately to the frontend
       res.status(202).json({ message: 'Processing started.', total: issues.length });
-    } catch (error: any) {
-      console.error('Error fetching Jira issues:', error.message || error);
-      setError(error.message || 'Unknown error');
+    } catch (error: unknown) {
+      console.error(
+        'Error fetching Jira issues:',
+        error instanceof Error ? error.message : error
+      );
+      setError(error instanceof Error ? error.message : 'Unknown error');
       res.status(500).json({ error: 'Failed to fetch Jira issues.' });
     }
     return;

@@ -50,16 +50,18 @@ const SuggestIssuesForm: React.FC<SuggestIssuesFormProps> = ({ onSuggestionsRece
                 duration: 3000,
                 isClosable: true,
             });
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error getting suggestions:', error);
             toast({
                 title: 'Error',
-                description: error.message || 'Failed to get suggestions.',
+                description:
+                    error instanceof Error ? error.message : 'Failed to get suggestions.',
                 status: 'error',
                 duration: 5000,
                 isClosable: true,
             });
-        } finally {
+        }
+        finally {
             setLoading(false);
         }
     };

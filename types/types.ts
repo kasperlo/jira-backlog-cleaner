@@ -104,4 +104,22 @@ export interface SimilarIssue {
   similarity: number;
 }
 
+export interface IssueData {
+  fields: {
+    project: { key: string };
+    summary: string;
+    description: string;
+    issuetype: { name: string };
+    [key: string]: unknown;
+  };
+}
 
+export interface IssueType {
+  id: string;
+  name: string;
+}
+
+export interface ProjectMeta {
+  key: string;
+  issuetypes: IssueType[];
+}
