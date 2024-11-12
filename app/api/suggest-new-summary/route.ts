@@ -2,8 +2,8 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import JiraClient from 'jira-client';
-import openai from '../../lib/openaiClient';
-import { JiraConfig, JiraIssue } from '../../types/types';
+import openai from '../../../lib/openaiClient';
+import { JiraConfig, JiraIssue } from '../../../types/types';
 import { retryWithExponentialBackoff } from '@/utils/retry';
 
 interface SuggestSummaryRequest {

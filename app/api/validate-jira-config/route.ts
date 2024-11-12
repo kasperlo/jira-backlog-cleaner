@@ -1,8 +1,8 @@
 // pages/api/validate-jira-config.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { JiraConfig } from '../../types/types';
-import { validateJiraConfig } from '../../utils/validateJiraConfig';
+import { JiraConfig } from '../../../types/types';
+import { validateJiraConfig } from '../../../utils/validateJiraConfig';
 
 interface ValidateJiraConfigResponse {
   success: boolean;

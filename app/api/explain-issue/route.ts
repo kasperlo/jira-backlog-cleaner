@@ -1,10 +1,10 @@
 // pages/api/explain-issue.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { createJiraClient } from '../../lib/jiraClient';
-import openai from '../../lib/openaiClient';
-import { JiraConfig, JiraIssue } from '../../types/types';
-import { fetchAllIssues } from '../../utils/issueProcessor';
+import { createJiraClient } from '../../../lib/jiraClient';
+import openai from '../../../lib/openaiClient';
+import { JiraConfig, JiraIssue } from '../../../types/types';
+import { fetchAllIssues } from '../../../utils/issueProcessor';
 import { retryWithExponentialBackoff } from '@/utils/retry';
 
 interface ExplainIssueRequest {

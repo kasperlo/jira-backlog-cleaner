@@ -2,8 +2,8 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import JiraClient from 'jira-client';
-import openai from '../../lib/openaiClient';
-import pinecone from '../../lib/pineconeClient';
+import openai from '../../../lib/openaiClient';
+import pinecone from '../../../lib/pineconeClient';
 import { retryWithExponentialBackoff } from '@/utils/retry';
 import { IssueData } from '@/types/types';
 

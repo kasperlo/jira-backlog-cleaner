@@ -1,10 +1,10 @@
 // pages/api/update-embeddings.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { createJiraClient } from '../../lib/jiraClient';
-import openai from '../../lib/openaiClient';
+import { createJiraClient } from '../../../lib/jiraClient';
+import openai from '../../../lib/openaiClient';
 import { Pinecone } from '@pinecone-database/pinecone';
-import { JiraConfig } from '../../types/types';
+import { JiraConfig } from '../../../types/types';
 import { retryWithExponentialBackoff } from '@/utils/retry';
 
 const pinecone = new Pinecone();

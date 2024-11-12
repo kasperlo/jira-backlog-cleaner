@@ -1,9 +1,9 @@
 // pages/api/suggest-action.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import openai from '../../lib/openaiClient';
+import openai from '../../../lib/openaiClient';
 import Ajv from 'ajv';
-import { ActionSuggestion, JiraIssue } from '../../types/types';
+import { ActionSuggestion, JiraIssue } from '../../../types/types';
 import { retryWithExponentialBackoff } from '@/utils/retry';
 
 const ajv = new Ajv();

@@ -1,19 +1,19 @@
 // pages/api/issues.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { JiraIssue } from '../../types/types';
+import { JiraIssue } from '../../../types/types';
 import {
   fetchAllIssues,
   generateEmbeddings,
   upsertEmbeddingsToPinecone,
-} from '../../utils/issueProcessor';
+} from '../../../utils/issueProcessor';
 import {
   resetProgress,
   updateProgress,
   completeProgress,
   setError,
   getProgress,
-} from '../../lib/progressStore';
+} from '../../../lib/progressStore';
 
 let processedIssuesList: JiraIssue[] = []; // Module-level variable
 

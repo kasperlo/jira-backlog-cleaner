@@ -1,8 +1,8 @@
 // pages/api/detect-duplicates.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import pinecone from '../../lib/pineconeClient';
-import { JiraIssue, DuplicateGroup } from '../../types/types';
+import pinecone from '../../../lib/pineconeClient';
+import { JiraIssue, DuplicateGroup } from '../../../types/types';
 
 interface FetchResponse {
   records: {

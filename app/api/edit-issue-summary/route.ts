@@ -2,7 +2,7 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import JiraClient from 'jira-client';
-import { validateJiraConfig } from '../../utils/validateJiraConfig';
+import { validateJiraConfig } from '../../../utils/validateJiraConfig';
 
 interface EditIssueSummaryRequest {
   issueKey: string;

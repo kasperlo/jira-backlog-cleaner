@@ -1,9 +1,9 @@
 // pages/api/get-similar-issues.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import openai from '../../lib/openaiClient';
-import pinecone from '../../lib/pineconeClient';
-import { SimilarIssue } from '../../types/types';
+import openai from '../../../lib/openaiClient';
+import pinecone from '../../../lib/pineconeClient';
+import { SimilarIssue } from '../../../types/types';
 import Ajv from 'ajv';
 import { retryWithExponentialBackoff } from '@/utils/retry';
 
