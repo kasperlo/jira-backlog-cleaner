@@ -1,6 +1,6 @@
-// pages/api/issues.ts
+// jira-backlog-cleaner/app/api/issues/route.ts
 
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextResponse } from 'next/server';
 import { JiraIssue } from '../../../types/types';
 import {
   fetchAllIssues,
@@ -17,8 +17,8 @@ import {
 
 let processedIssuesList: JiraIssue[] = []; // Module-level variable
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { config, action } = req.body;
+export async function POST(request: Request) {
+  const { config, action } = await request.json();
 
   // Validate Jira configuration
   if (
@@ -28,15 +28,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     !config.jiraBaseUrl ||
     !config.projectKey
   ) {
-    res.status(400).json({ error: 'Invalid Jira configuration provided.' });
     console.warn('Invalid Jira configuration:', config);
-    return;
+    return NextResponse.json({ error: 'Invalid Jira configuration provided.' }, { status: 400 });
   }
 
   if (action === 'fetchProcessedIssues') {
     // Return the list of processed issues
-    res.status(200).json({ issues: processedIssuesList });
-    return;
+    return NextResponse.json({ issues: processedIssuesList }, { status: 200 });
   }
 
   if (action === 'process') {
@@ -44,8 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const progress = getProgress();
     if (progress.status === 'processing') {
       console.warn('Processing already in progress.');
-      res.status(409).json({ error: 'Processing is already in progress.' });
-      return;
+      return NextResponse.json({ error: 'Processing is already in progress.' }, { status: 409 });
     }
 
     try {
@@ -54,8 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log(`Total issues fetched: ${issues.length}`);
 
       if (issues.length === 0) {
-        res.status(200).json({ message: 'No issues found to process.' });
-        return;
+        return NextResponse.json({ message: 'No issues found to process.' }, { status: 200 });
       }
 
       // Reset progress and processed issues list
@@ -89,18 +85,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })();
 
       // Respond immediately to the frontend
-      res.status(202).json({ message: 'Processing started.', total: issues.length });
+      return NextResponse.json({ message: 'Processing started.', total: issues.length }, { status: 202 });
     } catch (error: unknown) {
       console.error(
         'Error fetching Jira issues:',
         error instanceof Error ? error.message : error
       );
       setError(error instanceof Error ? error.message : 'Unknown error');
-      res.status(500).json({ error: 'Failed to fetch Jira issues.' });
+      return NextResponse.json({ error: 'Failed to fetch Jira issues.' }, { status: 500 });
     }
-    return;
   }
 
   // Default response if action is not recognized
-  res.status(400).json({ error: 'Invalid action specified.' });
+  return NextResponse.json({ error: 'Invalid action specified.' }, { status: 400 });
 }

@@ -1,6 +1,6 @@
-// pages/api/suggest-action.ts
+// jira-backlog-cleaner/app/api/suggest-action/route.ts
 
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextResponse } from 'next/server';
 import openai from '../../../lib/openaiClient';
 import Ajv from 'ajv';
 import { ActionSuggestion, JiraIssue } from '../../../types/types';
@@ -32,40 +32,32 @@ const actionSuggestionSchema = {
 
 const validate = ajv.compile(actionSuggestionSchema);
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    res.status(405).end('Method Not Allowed');
-    console.warn(`Method ${req.method} not allowed on /api/suggest-action`);
-    return;
-  }
-
-  const { issues, config } = req.body;
-
-  if (!config || !config.jiraEmail || !config.jiraApiToken || !config.jiraBaseUrl || !config.projectKey) {
-    console.warn('Invalid Jira configuration provided:', config);
-    res.status(400).json({ error: 'Invalid Jira configuration provided.' });
-    return;
-  }
-
-  if (!issues || !Array.isArray(issues) || issues.length < 2) {
-    console.warn('Invalid issues provided:', issues);
-    res.status(400).json({ error: 'Invalid issues provided. At least two issues are required for duplicate detection.' });
-    return;
-  }
-
+export async function POST(request: Request) {
   try {
+    const { issues, config } = await request.json();
+
+    if (!config || !config.jiraEmail || !config.jiraApiToken || !config.jiraBaseUrl || !config.projectKey) {
+      console.warn('Invalid Jira configuration provided:', config);
+      return NextResponse.json({ error: 'Invalid Jira configuration provided.' }, { status: 400 });
+    }
+
+    if (!issues || !Array.isArray(issues) || issues.length < 2) {
+      console.warn('Invalid issues provided:', issues);
+      return NextResponse.json(
+        { error: 'Invalid issues provided. At least two issues are required for duplicate detection.' },
+        { status: 400 }
+      );
+    }
+
     const suggestion = await getActionSuggestion(issues);
     validateSuggestion(suggestion);
     console.log('Action suggestion generated successfully:', suggestion);
-    res.status(200).json({ suggestion });
+    return NextResponse.json({ suggestion });
   } catch (error: unknown) {
     console.error('Error in /api/suggest-action:', error);
-    res.status(500).json({
-      error: error instanceof Error ? error.message : 'Failed to get action suggestion.',
-    });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to get action suggestion.';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
-  
 }
 
 async function getActionSuggestion(issues: JiraIssue[]): Promise<ActionSuggestion> {
@@ -127,78 +119,25 @@ Ensure the JSON is the only output.
 
   console.log('Sending prompt to OpenAI:', prompt);
 
-  const maxRetries = 3;
-  let attempt = 0;
-  let delayMs = 1000; // 1 second
+  const response = await retryWithExponentialBackoff(() =>
+    openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 500,
+      temperature: 0,
+    })
+  );
 
-  while (attempt < maxRetries) {
-    try {
-      const response = await retryWithExponentialBackoff(() =>
-        openai.chat.completions.create({
-          model: 'gpt-4',
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 500,
-          temperature: 0,
-        })
-      );
+  const text = response.choices[0]?.message?.content?.trim();
+  console.log('Received response from OpenAI:', text);
 
-      const text = response.choices[0]?.message?.content?.trim();
+  const jsonText = text?.match(/\{[\s\S]*\}/)?.[0];
+  if (!jsonText) throw new Error('Failed to extract JSON from response.');
 
-      if (!text) {
-        console.error('Empty response from OpenAI');
-        throw new Error('No response from OpenAI');
-      }
+  const suggestion = JSON.parse(jsonText);
+  if (!validate(suggestion)) throw new Error('Invalid ActionSuggestion format.');
 
-      console.log('Received response from OpenAI:', text);
-
-      // Extract JSON from the response
-      let jsonText = text;
-      const match = text.match(/\{[\s\S]*\}/);
-      if (match) {
-        jsonText = match[0];
-      } else {
-        console.error('No JSON object found in the OpenAI response');
-        throw new Error('No JSON object found in the response');
-      }
-
-      console.log('Extracted JSON:', jsonText);
-
-      // Parse the response
-      let suggestion: ActionSuggestion;
-      try {
-        suggestion = JSON.parse(jsonText);
-      } catch (err) {
-        console.error('Error parsing OpenAI response:', err, 'Response Text:', text);
-        throw new Error('Failed to parse OpenAI response');
-      }
-
-      // Validate the suggestion against the schema
-      if (!validate(suggestion)) {
-        console.error('Invalid ActionSuggestion format:', validate.errors);
-        throw new Error('Invalid ActionSuggestion format.');
-      }
-
-      // No need to assign default arrays since the response includes only relevant fields
-
-      return suggestion as ActionSuggestion; // Type assertion to assist TypeScript
-    } catch (error: unknown) {
-      attempt++;
-      console.error(`Attempt ${attempt} - Error during OpenAI processing:`, error);
-    
-      if (error instanceof Error && attempt >= maxRetries) {
-        throw new Error(
-          error.message ||
-            'Failed to generate action suggestion after multiple attempts.'
-        );
-      }
-
-      console.log(`Retrying in ${delayMs / 1000} seconds...`);
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-      delayMs *= 2; // Exponential backoff
-    }
-  }
-
-  throw new Error('Failed to generate action suggestion.');
+  return suggestion as ActionSuggestion;
 }
 
 /**

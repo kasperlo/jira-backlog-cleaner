@@ -1,6 +1,6 @@
-// pages/api/detect-duplicates.ts
+// jira-backlog-cleaner/app/api/detect-duplicates/route.ts
 
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextResponse } from 'next/server';
 import pinecone from '../../../lib/pineconeClient';
 import { JiraIssue, DuplicateGroup } from '../../../types/types';
 
@@ -96,29 +96,20 @@ export async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise
   return duplicateGroups;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    res.status(405).json({ error: 'Method Not Allowed' });
-    console.warn(`Method ${req.method} not allowed on /api/detect-duplicates`);
-    return;
-  }
-
-  const { issues, config } = req.body;
-
-  if (!issues || !Array.isArray(issues) || issues.length === 0 || !config) {
-    console.warn('Invalid issues or config provided:', issues, config);
-    res.status(400).json({ error: 'Invalid issues or Jira config provided.' });
-    return;
-  }
-
+export async function POST(request: Request) {
   try {
+    const { issues, config } = await request.json();
+
+    if (!issues || !Array.isArray(issues) || issues.length === 0 || !config) {
+      console.warn('Invalid issues or config provided:', issues, config);
+      return NextResponse.json({ error: 'Invalid issues or Jira config provided.' }, { status: 400 });
+    }
+
     const duplicateGroups = await detectDuplicatesWithPinecone(issues);
-    res.status(200).json({ duplicates: duplicateGroups });
+    return NextResponse.json({ duplicates: duplicateGroups }, { status: 200 });
   } catch (error: unknown) {
     console.error('Error detecting duplicates:', error);
-    res.status(500).json({
-      error: error instanceof Error ? error.message : 'Failed to detect duplicates',
-    });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to detect duplicates';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

@@ -1,58 +1,48 @@
-// pages/api/update-embeddings.ts
+// jira-backlog-cleaner/app/api/update-embedding/route.ts
 
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextResponse } from 'next/server';
 import { createJiraClient } from '../../../lib/jiraClient';
 import openai from '../../../lib/openaiClient';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { JiraConfig } from '../../../types/types';
 import { retryWithExponentialBackoff } from '@/utils/retry';
+import { PINECONE_INDEX_NAME } from '@/config';
 
 const pinecone = new Pinecone();
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    res.status(405).end('Method Not Allowed');
-    return;
-  }
-
-  const { issueKey, config } = req.body;
-
-  if (!issueKey || !config) {
-    res.status(400).json({ error: 'Issue key and Jira config are required.' });
-    return;
-  }
-
-  // Validate JiraConfig structure (optional but recommended)
-  const { jiraEmail, jiraApiToken, jiraBaseUrl, projectKey } = config as JiraConfig;
-  if (!jiraEmail || !jiraApiToken || !jiraBaseUrl || !projectKey) {
-    return res.status(400).json({ error: 'Incomplete Jira configuration.' });
-  }
-
-  // Instantiate JiraClient with the provided config
-  const jiraClient = createJiraClient(config as JiraConfig);
-
+export async function POST(request: Request) {
   try {
+    const { issueKey, config } = await request.json();
+
+    if (!issueKey || !config) {
+      return NextResponse.json({ error: 'Issue key and Jira config are required.' }, { status: 400 });
+    }
+
+    // Validate JiraConfig structure
+    const { jiraEmail, jiraApiToken, jiraBaseUrl, projectKey } = config as JiraConfig;
+    if (!jiraEmail || !jiraApiToken || !jiraBaseUrl || !projectKey) {
+      return NextResponse.json({ error: 'Incomplete Jira configuration.' }, { status: 400 });
+    }
+
+    // Instantiate JiraClient with the provided config
+    const jiraClient = createJiraClient(config as JiraConfig);
+
     // Fetch the issue
     const issue = await jiraClient.findIssue(issueKey, '', 'summary,description,issuetype,parent');
-
-    // Log fetching the issue
-    console.log(`fetched ${issue.key} from jira`);
+    console.log(`Fetched issue ${issue.key} from Jira`);
 
     const text = `${issue.fields.summary}\n${issue.fields.description || ''}`;
-      const embeddingResponse = await retryWithExponentialBackoff(() =>
-        openai.embeddings.create({
-          model: 'text-embedding-3-large',
-          input: text,
+
+    const embeddingResponse = await retryWithExponentialBackoff(() =>
+      openai.embeddings.create({
+        model: 'text-embedding-3-large',
+        input: text,
       })
     );
     const embedding = embeddingResponse.data[0].embedding;
+    console.log(`Created vector embedding for issue ${issue.key}`);
 
-    // Log embedding creation
-    console.log(`created vector embedding for ${issue.key} in pinecone`);
-
-    const index = pinecone.index('masterz-3072');
-
+    const index = pinecone.index(PINECONE_INDEX_NAME);
     await index.upsert([
       {
         id: issueKey,
@@ -67,10 +57,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     ]);
 
-    // Log embedding upsert
-    console.log(`updated vector embedding for ${issue.key} in pinecone`);
+    console.log(`Updated vector embedding for issue ${issue.key} in Pinecone`);
 
-    res.status(200).json({ message: 'Embedding updated successfully.' });
+    return NextResponse.json({ message: 'Embedding updated successfully.' }, { status: 200 });
   } catch (error: unknown) {
     if (error && typeof error === 'object' && 'response' in error) {
       const axiosError = error as {
@@ -81,17 +70,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
       };
       console.error('Error updating embedding:', axiosError.response.data || error);
-      res.status(500).json({
-        error:
-          axiosError.response.data?.errorMessages?.[0] || 'Failed to update embedding.',
-      });
+      return NextResponse.json(
+        { error: axiosError.response.data?.errorMessages?.[0] || 'Failed to update embedding.' },
+        { status: 500 }
+      );
     } else if (error instanceof Error) {
       console.error('Error updating embedding:', error.message);
-      res.status(500).json({ error: error.message });
+      return NextResponse.json({ error: error.message }, { status: 500 });
     } else {
       console.error('Unknown error:', error);
-      res.status(500).json({ error: 'Failed to update embedding.' });
+      return NextResponse.json({ error: 'Failed to update embedding.' }, { status: 500 });
     }
   }
-  
 }

@@ -1,58 +1,45 @@
-// pages/api/make-subtask.ts
+// jira-backlog-cleaner/app/api/make-subtask/route.ts
 
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextResponse } from 'next/server';
 import JiraClient from 'jira-client';
 import { ProjectMeta } from '@/types/types';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    res.status(405).end('Method Not Allowed');
-    return;
-  }
-
-  const { parentIssueKey, subtaskIssueKey, config } = req.body;
-
-  if (!config || !config.jiraEmail || !config.jiraApiToken || !config.jiraBaseUrl || !config.projectKey) {
-    console.warn('Invalid Jira configuration provided:', config);
-    res.status(400).json({ error: 'Invalid Jira configuration provided.' });
-    return;
-  }
-
-  if (!parentIssueKey || !subtaskIssueKey) {
-    res.status(400).json({ error: 'Parent issue key and subtask issue key are required.' });
-    return;
-  }
-
-  // Initialize Jira client with user-provided config
-  const jira = new JiraClient({
-    protocol: 'https',
-    host: config.jiraBaseUrl.replace(/^https?:\/\//, ''), // Remove protocol
-    username: config.jiraEmail,
-    password: config.jiraApiToken,
-    apiVersion: '2',
-    strictSSL: true,
-  });
-
+export async function POST(request: Request) {
   try {
+    const { parentIssueKey, subtaskIssueKey, config } = await request.json();
+
+    if (!config || !config.jiraEmail || !config.jiraApiToken || !config.jiraBaseUrl || !config.projectKey) {
+      console.warn('Invalid Jira configuration provided:', config);
+      return NextResponse.json({ error: 'Invalid Jira configuration provided.' }, { status: 400 });
+    }
+
+    if (!parentIssueKey || !subtaskIssueKey) {
+      return NextResponse.json(
+        { error: 'Parent issue key and subtask issue key are required.' },
+        { status: 400 }
+      );
+    }
+
+    // Initialize Jira client with user-provided config
+    const jira = new JiraClient({
+      protocol: 'https',
+      host: config.jiraBaseUrl.replace(/^https?:\/\//, ''), // Remove protocol
+      username: config.jiraEmail,
+      password: config.jiraApiToken,
+      apiVersion: '2',
+      strictSSL: true,
+    });
+
     // Fetch details of parent and subtask issues
-    const parentIssue = await jira.findIssue(
-      parentIssueKey,
-      '',
-      'summary,project,issuetype'
-    );
-    const subtaskIssue = await jira.findIssue(
-      subtaskIssueKey,
-      '',
-      'summary,project,description'
-    );
+    const parentIssue = await jira.findIssue(parentIssueKey, '', 'summary,project,issuetype');
+    const subtaskIssue = await jira.findIssue(subtaskIssueKey, '', 'summary,project,description');
 
     // Ensure the parent and subtask are in the same project
     if (parentIssue.fields.project.key !== subtaskIssue.fields.project.key) {
-      res.status(400).json({
-        error: 'The parent issue and subtask issue must be in the same project.',
-      });
-      return;
+      return NextResponse.json(
+        { error: 'The parent issue and subtask issue must be in the same project.' },
+        { status: 400 }
+      );
     }
 
     // Check if parent issue type supports subtasks
@@ -60,10 +47,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const issueTypesThatSupportSubtasks = ['Task', 'Story', 'Bug', 'Epic'];
 
     if (!issueTypesThatSupportSubtasks.includes(parentIssueType)) {
-      res.status(400).json({
-        error: `The parent issue type '${parentIssueType}' does not support subtasks.`,
-      });
-      return;
+      return NextResponse.json(
+        { error: `The parent issue type '${parentIssueType}' does not support subtasks.` },
+        { status: 400 }
+      );
     }
 
     // Fetch create metadata to get the issue type ID for 'Sub-task' or 'Deloppgave'
@@ -93,10 +80,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (!subtaskIssueTypeId) {
-      res.status(400).json({
-        error: "Neither 'Sub-task' nor 'Deloppgave' issue type found in the project. Ensure that the correct issue type is available in the project's issue type scheme.",
-      });
-      return;
+      return NextResponse.json(
+        { error: "Neither 'Sub-task' nor 'Deloppgave' issue type found in the project. Ensure that the correct issue type is available in the project's issue type scheme." },
+        { status: 400 }
+      );
     }
 
     // Create a new subtask under the parent issue
@@ -119,18 +106,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Delete the original issue if subtask creation is successful
     await jira.deleteIssue(subtaskIssueKey);
 
-    res.status(200).json({
+    return NextResponse.json({
       message: 'Issue converted to subtask successfully.',
       newSubtaskKey: newSubtask.key,
-    });
+    }, { status: 200 });
   } catch (error: unknown) {
-    if (error instanceof Error) {
-      // Handle known errors
-      res.status(500).json({ error: error.message });
-      console.error('Internal server error while promoting to Epic:', error.message);
-    } else {
-      res.status(500).json({ error: 'Internal server error while promoting to Epic.' });
-      console.error('Internal server error while promoting to Epic:', error);
-    }
-  }  
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error while promoting to Epic.';
+    console.error('Error converting issue to subtask:', errorMessage);
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  }
 }

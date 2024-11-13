@@ -1,6 +1,6 @@
-// pages/api/explain-issue.ts
+// jira-backlog-cleaner/app/api/explain-issue/route.ts
 
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextResponse } from 'next/server';
 import { createJiraClient } from '../../../lib/jiraClient';
 import openai from '../../../lib/openaiClient';
 import { JiraConfig, JiraIssue } from '../../../types/types';
@@ -17,30 +17,22 @@ interface ExplainIssueResponse {
   explanation: string;
 }
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<ExplainIssueResponse | { error: string }>
-) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-
-  const { issueKey, projectDescription, config } = req.body as ExplainIssueRequest;
-
-  if (!issueKey || !config) {
-    return res.status(400).json({ error: 'Issue key and Jira config are required.' });
-  }
-
-  const { jiraEmail, jiraApiToken, jiraBaseUrl, projectKey } = config;
-  if (!jiraEmail || !jiraApiToken || !jiraBaseUrl || !projectKey) {
-    return res.status(400).json({ error: 'Incomplete Jira configuration.' });
-  }
-
-  const jiraClient = createJiraClient(config);
-
+export async function POST(request: Request) {
   try {
-    // Fetch the specific issue to explain with type assertion
+    const { issueKey, projectDescription, config } = await request.json() as ExplainIssueRequest;
+
+    if (!issueKey || !config) {
+      return NextResponse.json({ error: 'Issue key and Jira config are required.' }, { status: 400 });
+    }
+
+    const { jiraEmail, jiraApiToken, jiraBaseUrl, projectKey } = config;
+    if (!jiraEmail || !jiraApiToken || !jiraBaseUrl || !projectKey) {
+      return NextResponse.json({ error: 'Incomplete Jira configuration.' }, { status: 400 });
+    }
+
+    const jiraClient = createJiraClient(config);
+
+    // Fetch the specific issue to explain
     const issueResponse = await jiraClient.findIssue(issueKey, '', 'summary,description');
     const issue: JiraIssue = issueResponse as JiraIssue;
 
@@ -92,11 +84,10 @@ Description: ${issue.fields.description || 'No description provided.'}
       throw new Error('No explanation received from OpenAI.');
     }
 
-    res.status(200).json({ explanation });
+    return NextResponse.json({ explanation }, { status: 200 });
   } catch (error: unknown) {
     console.error('Error explaining issue:', error);
-    res.status(500).json({
-      error: error instanceof Error ? error.message : 'Failed to generate issue explanation.',
-    });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to generate issue explanation.';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

@@ -1,36 +1,35 @@
-// pages/api/link-issue-to-epic.ts
+// jira-backlog-cleaner/app/api/link-issue-to-epic/route.ts
 
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextResponse } from 'next/server';
 import { createJiraClient } from '../../../lib/jiraClient';
 import { JiraConfig } from '../../../types/types';
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    res.status(405).json({ error: 'Method Not Allowed' });
-    return;
-  }
-
-  const { issueKey, epicKey, config } = req.body;
-
-  if (!issueKey || !epicKey || !config) {
-    res.status(400).json({ error: 'Issue key, epic key, and Jira config are required.' });
-    return;
-  }
-
-  // Validate JiraConfig structure
-  const { jiraEmail, jiraApiToken, jiraBaseUrl, projectKey } = config as JiraConfig;
-  if (!jiraEmail || !jiraApiToken || !jiraBaseUrl || !projectKey) {
-    return res.status(400).json({ error: 'Incomplete Jira configuration.' });
-  }
-
-  // Instantiate JiraClient with the provided config
-  const jiraClient = createJiraClient(config as JiraConfig);
+export async function POST(request: Request) {
+  let issueKey: string | undefined;
+  let epicKey: string | undefined;
 
   try {
+    const { issueKey: reqIssueKey, epicKey: reqEpicKey, config } = await request.json();
+
+    issueKey = reqIssueKey;
+    epicKey = reqEpicKey;
+
+    if (!issueKey || !epicKey || !config) {
+      return NextResponse.json(
+        { error: 'Issue key, epic key, and Jira config are required.' },
+        { status: 400 }
+      );
+    }
+
+    // Validate JiraConfig structure
+    const { jiraEmail, jiraApiToken, jiraBaseUrl, projectKey } = config as JiraConfig;
+    if (!jiraEmail || !jiraApiToken || !jiraBaseUrl || !projectKey) {
+      return NextResponse.json({ error: 'Incomplete Jira configuration.' }, { status: 400 });
+    }
+
+    // Instantiate JiraClient with the provided config
+    const jiraClient = createJiraClient(config as JiraConfig);
+
     console.log(`Linking issue ${issueKey} to epic ${epicKey}`);
 
     // Verify that the epic exists and is of type 'Epic'
@@ -38,8 +37,7 @@ export default async function handler(
     console.log(`Fetched epic issue: ${epicKey}`, epicIssue);
 
     if (epicIssue.fields.issuetype.name !== 'Epic') {
-      res.status(400).json({ error: `${epicKey} is not an Epic.` });
-      return;
+      return NextResponse.json({ error: `${epicKey} is not an Epic.` }, { status: 400 });
     }
 
     // Determine the correct field for 'Epic Link'
@@ -48,8 +46,7 @@ export default async function handler(
 
     if (!epicLinkField) {
       console.error(`'Epic Link' field not found in Jira.`);
-      res.status(500).json({ error: `'Epic Link' field not found in Jira.` });
-      return;
+      return NextResponse.json({ error: `'Epic Link' field not found in Jira.` }, { status: 500 });
     }
 
     console.log(`Epic Link Field ID: ${epicLinkField.id}`);
@@ -63,9 +60,10 @@ export default async function handler(
 
     console.log(`Issue ${issueKey} linked to Epic ${epicKey} successfully.`);
 
-    res
-      .status(200)
-      .json({ message: `Issue ${issueKey} linked to Epic ${epicKey} successfully.` });
+    return NextResponse.json(
+      { message: `Issue ${issueKey} linked to Epic ${epicKey} successfully.` },
+      { status: 200 }
+    );
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error
@@ -73,10 +71,8 @@ export default async function handler(
         : `Failed to link issue ${issueKey} to epic ${epicKey}.`;
     console.error(
       `Error linking issue ${issueKey} to epic ${epicKey}:`,
-      error instanceof Error ? error.message : error
+      errorMessage
     );
-    res.status(500).json({
-      error: errorMessage,
-    });
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

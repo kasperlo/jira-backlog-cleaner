@@ -1,11 +1,12 @@
-// pages/api/get-similar-issues.ts
+// jira-backlog-cleaner/app/api/get-similar-issues/route.ts
 
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextResponse } from 'next/server';
 import openai from '../../../lib/openaiClient';
 import pinecone from '../../../lib/pineconeClient';
 import { SimilarIssue } from '../../../types/types';
 import Ajv from 'ajv';
 import { retryWithExponentialBackoff } from '@/utils/retry';
+import { PINECONE_INDEX_NAME } from '@/config';
 
 interface ErrorWithResponse {
   response: {
@@ -31,26 +32,18 @@ const similarIssueSchema = {
   },
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    res.status(405).json({ error: 'Method Not Allowed' });
-    return;
-  }
-
-  const { summary, config } = req.body;
-
-  if (!summary) {
-    res.status(400).json({ error: 'Issue summary is required.' });
-    return;
-  }
-
-  if (!config) {
-    res.status(400).json({ error: 'Jira configuration is required.' });
-    return;
-  }
-
+export async function POST(request: Request) {
   try {
+    const { summary, config } = await request.json();
+
+    if (!summary) {
+      return NextResponse.json({ error: 'Issue summary is required.' }, { status: 400 });
+    }
+
+    if (!config) {
+      return NextResponse.json({ error: 'Jira configuration is required.' }, { status: 400 });
+    }
+
     console.log(`Generating embedding for suggestion summary: ${summary}`);
 
     // Generate embedding for the suggestion summary
@@ -67,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Retrieve top 3 similar issues from Pinecone
     console.log('Retrieving top 3 similar issues using Pinecone...');
-    const similarIssuesResponse = await pinecone.index('masterz-3072').query({
+    const similarIssuesResponse = await pinecone.index(PINECONE_INDEX_NAME).query({
       vector: suggestionEmbedding,
       topK: 3,
       includeMetadata: true,
@@ -77,8 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Check if matches exist
     if (!similarIssuesResponse.matches) {
       console.warn('No similar issues found.');
-      res.status(200).json({ similarIssues: [] });
-      return;
+      return NextResponse.json({ similarIssues: [] }, { status: 200 });
     }
 
     // Define RecordMetadata interface
@@ -108,7 +100,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       throw new Error('Invalid similar issues format received.');
     }
 
-    res.status(200).json({ similarIssues });
+    return NextResponse.json({ similarIssues }, { status: 200 });
   } catch (error: unknown) {
     if (error && typeof error === 'object' && 'response' in error) {
       const axiosError = error as ErrorWithResponse;
@@ -122,6 +114,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } else {
       console.error('Unknown error:', error);
     }
-    res.status(500).json({ error: 'Failed to retrieve similar issues.' });
+    return NextResponse.json({ error: 'Failed to retrieve similar issues.' }, { status: 500 });
   }
 }

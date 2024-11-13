@@ -1,12 +1,13 @@
-// pages/api/suggest-new-issues.ts
+// jira-backlog-cleaner/app/api/suggest-new-issues/route.ts
 
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextResponse } from 'next/server';
 import openai from '../../../lib/openaiClient';
 import pinecone from '../../../lib/pineconeClient';
 import { retrieveSimilarIssues } from '../../../utils/retrieveSimilarIssues';
 import { SuggestedIssue, JiraIssue } from '../../../types/types';
 import Ajv from 'ajv';
 import { retryWithExponentialBackoff } from '@/utils/retry';
+import { PINECONE_INDEX_NAME } from '@/config';
 
 // Initialize AJV for JSON schema validation
 const ajv = new Ajv();
@@ -24,30 +25,19 @@ const suggestionSchema = {
     additionalProperties: false,
   },
 };
+const validate = ajv.compile(suggestionSchema);
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    res.status(405).json({ error: 'Method Not Allowed' });
-    return;
-  }
-
-  const { projectDescription, config } = req.body;
-
-  if (!projectDescription) {
-    res.status(400).json({ error: 'Project description is required.' });
-    return;
-  }
-
-  if (!config) {
-    res.status(400).json({ error: 'Jira configuration is required.' });
-    return;
-  }
-
+export async function POST(request: Request) {
   try {
-    console.log('Generating embedding for project description:', projectDescription);
+    const { projectDescription, config } = await request.json();
+
+    if (!projectDescription || !config) {
+      const missingField = !projectDescription ? 'Project description' : 'Jira configuration';
+      return NextResponse.json({ error: `${missingField} is required.` }, { status: 400 });
+    }
 
     // Generate embedding for the project description
+    console.log('Generating embedding for project description:', projectDescription);
     const embeddingResponse = await retryWithExponentialBackoff(() =>
       openai.embeddings.create({
         model: 'text-embedding-3-large',
@@ -55,40 +45,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     );
 
-    console.log('Embedding generated successfully:', {
-      model: embeddingResponse.model,
-      usage: embeddingResponse.usage,
-    });
-
     const queryEmbedding = embeddingResponse.data[0].embedding;
 
     // Retrieve similar issues from Pinecone (topK=10)
     console.log('Retrieving similar issues using Pinecone...');
     const similarIssues: JiraIssue[] = await retrieveSimilarIssues(queryEmbedding, 10);
-    console.log(`Retrieved ${similarIssues.length} similar issues from Pinecone.`);
 
     const similarityThreshold = 0.6;
     const isRelevant = similarIssues.some((issue) => issue.fields.similarity! >= similarityThreshold);
-
     if (!isRelevant) {
-      res.status(400).json({
-        error: 'The project description does not appear to be correct.',
-      });
-      return;
+      return NextResponse.json({ error: 'The project description does not appear to be correct.' }, { status: 400 });
     }
 
-    // Log similarity scores
-    similarIssues.forEach((issue, index) => {
-      console.log(`Issue ${index + 1}: ${issue.key} with similarity score ${issue.fields.similarity}`);
-    });
-
-    // Determine the total number of existing issues
-    const index = pinecone.Index('masterz-3072');
+    const index = pinecone.Index(PINECONE_INDEX_NAME);
     const stats = await index.describeIndexStats();
     const totalExistingIssues = stats.totalRecordCount || 0;
-    console.log(`Total existing issues in Pinecone index: ${totalExistingIssues}`);
 
-    // Format existing issues as JSON objects for the prompt
     const existingIssuesText = similarIssues
       .map((issue: JiraIssue) => `
 {
@@ -99,7 +71,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 }`)
       .join(',\n');
 
-    // Optionally, include examples to guide GPT-4
     const exampleIssuesText = similarIssues.slice(0, 2)
       .map((issue: JiraIssue) => `
 {
@@ -169,36 +140,24 @@ ${exampleIssuesText}
 
     console.log('Prompt constructed for OpenAI:', prompt);
 
-    // Call OpenAI API for chat completion
     const response = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1000, // Adjust as needed
+      max_tokens: 1000,
       temperature: 0.7,
-    });
-
-    console.log('OpenAI API response received:', {
-      id: response.id,
-      model: response.model,
-      choices: response.choices.length,
     });
 
     const suggestionsText = response.choices[0]?.message?.content?.trim();
 
-    // Parse and validate the response
     let suggestions: SuggestedIssue[] = [];
     try {
       suggestions = JSON.parse(suggestionsText || "[]");
 
-      const validate = ajv.compile(suggestionSchema);
       const valid = validate(suggestions);
-
       if (!valid) {
-        console.error('Validation errors:', validate.errors);
         throw new Error('Invalid suggestions format received from OpenAI.');
       }
 
-      // Post-process suggestions to ensure no overlap
       const filteredSuggestions: SuggestedIssue[] = [];
 
       for (const suggestion of suggestions) {
@@ -209,45 +168,35 @@ ${exampleIssuesText}
           })
         );
 
-        console.log(`Embedding generated for suggestion: ${suggestion.summary}`);
-
         const suggestionEmbedding = suggestionEmbeddingResponse.data[0].embedding;
-
-        // Perform a similarity search in Pinecone for the suggestion embedding
-        const duplicateCheckResponse = await pinecone.index('masterz-3072').query({
+        const duplicateCheckResponse = await pinecone.index(PINECONE_INDEX_NAME).query({
           vector: suggestionEmbedding,
-          topK: 1, // Retrieve the most similar existing issue
+          topK: 1,
           includeMetadata: false,
           includeValues: false,
         });
 
-        // Check if any existing issue has similarity > 0.75
         const topMatch = duplicateCheckResponse.matches[0];
         const similarityScore = topMatch ? topMatch.score : 0;
-
-        const similarityThreshold: number = parseFloat(process.env.SIMILARITY_THRESHOLD || '0.75');
-        console.log(`Similarity score for suggestion "${suggestion.summary}": ${similarityScore}`);
+        const similarityThreshold = parseFloat(process.env.SIMILARITY_THRESHOLD || '0.75');
 
         if (similarityScore! < similarityThreshold) {
-          // Suggestion is unique enough
           filteredSuggestions.push(suggestion);
         } else {
           console.log(`Duplicate suggestion filtered out: ${suggestion.summary}`);
         }
       }
 
-      // Log the number of comparisons made
       console.log(`Total existing issues compared against: ${totalExistingIssues}`);
 
-      res.status(200).json({ suggestions: filteredSuggestions });
+      return NextResponse.json({ suggestions: filteredSuggestions });
     } catch (err) {
       console.error('Error parsing or validating OpenAI response:', err);
-      console.error('OpenAI response content that failed to parse:', suggestionsText);
-      res.status(500).json({ error: 'Failed to parse OpenAI response.' });
+      return NextResponse.json({ error: 'Failed to parse OpenAI response.' }, { status: 500 });
     }
 
   } catch (err: unknown) {
-    console.error('Error parsing or validating OpenAI response:', err);
-    res.status(500).json({ error: 'Failed to parse OpenAI response.' });
-  }  
+    console.error('Error in suggest-new-issues endpoint:', err);
+    return NextResponse.json({ error: 'Internal server error in suggest-new-issues endpoint.' }, { status: 500 });
+  }
 }

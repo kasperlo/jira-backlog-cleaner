@@ -2,9 +2,10 @@
 
 import { JiraIssue, RecordMetadata } from '@/types/types';
 import pinecone from '../lib/pineconeClient';
+import { PINECONE_INDEX_NAME } from '@/config';
 
 export async function retrieveSimilarIssues(queryEmbedding: number[], topK: number = 10): Promise<JiraIssue[]> {
-  const index = pinecone.Index('masterz-3072');
+  const index = pinecone.Index(PINECONE_INDEX_NAME);
 
   const queryResponse = await index.query({
     vector: queryEmbedding,

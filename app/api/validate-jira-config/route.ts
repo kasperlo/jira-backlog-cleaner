@@ -1,6 +1,6 @@
-// pages/api/validate-jira-config.ts
+// jira-backlog-cleaner/app/api/validate-jira-config/route.ts
 
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextResponse } from 'next/server';
 import { JiraConfig } from '../../../types/types';
 import { validateJiraConfig } from '../../../utils/validateJiraConfig';
 
@@ -9,29 +9,21 @@ interface ValidateJiraConfigResponse {
   message: string;
 }
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<ValidateJiraConfigResponse>
-) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    return res.status(405).json({ success: false, message: 'Method Not Allowed' });
-  }
-
-  const { config } = req.body as { config: JiraConfig };
-  const validationError = validateJiraConfig(config);
-  if (validationError) {
-    return res.status(400).json({ success: false, message: validationError });
-  }
-
+export async function POST(request: Request) {
   try {
+    const { config } = await request.json() as { config: JiraConfig };
+
+    const validationError = validateJiraConfig(config);
+    if (validationError) {
+      return NextResponse.json({ success: false, message: validationError }, { status: 400 });
+    }
+
     // Attempt to fetch the project to validate the configuration
-    return res.status(200).json({ success: true, message: `Project '${config.projectKey}' found.` });
+    return NextResponse.json({ success: true, message: `Project '${config.projectKey}' found.` }, { status: 200 });
   } catch (error: unknown) {
     console.error('Jira Validation Error:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Failed to validate Jira configuration.';
-    return res.status(500).json({ success: false, message: errorMessage });
+    return NextResponse.json({ success: false, message: errorMessage }, { status: 500 });
   }
-  
 }

@@ -1,51 +1,45 @@
-// pages/api/delete-issue.ts
+// jira-backlog-cleaner/app/api/delete-issue/route.ts
 
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextResponse } from 'next/server';
 import JiraClient from 'jira-client';
 import { JiraIssue } from '@/types/types';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    res.status(405).json({ error: 'Method Not Allowed' });
-    return;
-  }
-
-  const { issueKey, action, config } = req.body;
-
-  // Validate Jira configuration
-  if (
-    !config ||
-    !config.jiraEmail ||
-    !config.jiraApiToken ||
-    !config.jiraBaseUrl ||
-    !config.projectKey
-  ) {
-    res.status(400).json({ error: 'Invalid Jira configuration provided.' });
-    return;
-  }
-
-  if (!issueKey) {
-    res.status(400).json({ error: 'Issue key is required.' });
-    return;
-  }
-
-  if (action && !['delete', 'convert'].includes(action)) {
-    res.status(400).json({ error: "Invalid action. Allowed actions: 'delete', 'convert'." });
-    return;
-  }
-
-  // Initialize Jira client with user-provided configuration
-  const jira = new JiraClient({
-    protocol: 'https',
-    host: config.jiraBaseUrl.replace(/^https?:\/\//, ''), // Remove protocol
-    username: config.jiraEmail,
-    password: config.jiraApiToken,
-    apiVersion: '2',
-    strictSSL: true,
-  });
-
+export async function POST(request: Request) {
   try {
+    const { issueKey, action, config } = await request.json();
+
+    // Validate Jira configuration
+    if (
+      !config ||
+      !config.jiraEmail ||
+      !config.jiraApiToken ||
+      !config.jiraBaseUrl ||
+      !config.projectKey
+    ) {
+      return NextResponse.json({ error: 'Invalid Jira configuration provided.' }, { status: 400 });
+    }
+
+    if (!issueKey) {
+      return NextResponse.json({ error: 'Issue key is required.' }, { status: 400 });
+    }
+
+    if (action && !['delete', 'convert'].includes(action)) {
+      return NextResponse.json(
+        { error: "Invalid action. Allowed actions: 'delete', 'convert'." },
+        { status: 400 }
+      );
+    }
+
+    // Initialize Jira client with user-provided configuration
+    const jira = new JiraClient({
+      protocol: 'https',
+      host: config.jiraBaseUrl.replace(/^https?:\/\//, ''), // Remove protocol
+      username: config.jiraEmail,
+      password: config.jiraApiToken,
+      apiVersion: '2',
+      strictSSL: true,
+    });
+
     // Fetch issue details
     const issue = await jira.findIssue(issueKey, '', 'subtasks');
 
@@ -57,11 +51,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           summary: subtask.fields.summary,
         }));
 
-        res.status(200).json({
+        return NextResponse.json({
           message: `Issue '${issueKey}' has subtasks. Please specify the action to perform on subtasks.`,
           subtasks,
         });
-        return;
       }
 
       if (action === 'delete') {
@@ -84,7 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Delete the main issue
     await jira.deleteIssue(issueKey);
 
-    res.status(200).json({
+    return NextResponse.json({
       message:
         action === 'delete'
           ? `Issue '${issueKey}' and its subtasks have been deleted successfully.`
@@ -97,6 +90,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       'Error deleting Jira issue:',
       error instanceof Error ? error.message : 'Unknown error'
     );
-    res.status(500).json({ error: 'Failed to delete Jira issue.' });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to delete Jira issue.';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
