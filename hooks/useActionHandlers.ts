@@ -253,35 +253,53 @@ export function useActionHandlers(
    * @param parentIssueKey - The key of the parent issue.
    * @param subtaskIssueKey - The key of the issue to convert into a subtask.
    */
-  const performMakeSubtask = async (parentIssueKey: string, subtaskIssueKey: string) => {
-    const confirmAction = window.confirm(
-      `Are you sure you want to convert issue ${subtaskIssueKey} into a subtask of issue ${parentIssueKey}? This will remove ${subtaskIssueKey} from the top-level and nest it under ${parentIssueKey}.`
-    );
-    if (!confirmAction) return;
 
-    try {
-      await axios.post('/api/make-subtask', {
-        subtaskIssueKey: subtaskIssueKey,
-        parentIssueKey: parentIssueKey,
-        config,
-      });
-      toast({
-        title: `Issue ${subtaskIssueKey} has been converted into a subtask of ${parentIssueKey}.`,
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-      fetchIssuesData();
-    } catch (error: any) {
-      console.error('Error converting to subtask:', error);
-      toast({
-        title: 'Failed to convert issue to subtask.',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    }
-  };
+const performMakeSubtask = async (parentIssueKey: string, subtaskIssueKey: string) => {
+  const issue = issues.find((issue) => issue.key === subtaskIssueKey);
+  let hasSubtasks = false;
+
+  if (issue?.fields.subtasks && issue.fields.subtasks.length > 0) {
+    hasSubtasks = true;
+  }
+
+  let confirmAction = true;
+  if (hasSubtasks) {
+    confirmAction = window.confirm(
+      `Issue ${subtaskIssueKey} has subtasks. Converting it to a subtask will reassign its subtasks to the parent issue ${parentIssueKey}. Do you want to proceed?`
+    );
+  } else {
+    confirmAction = window.confirm(
+      `Are you sure you want to convert issue ${subtaskIssueKey} into a subtask of issue ${parentIssueKey}? This will nest ${subtaskIssueKey} under ${parentIssueKey}.`
+    );
+  }
+
+  if (!confirmAction) return;
+
+  try {
+    await axios.post('/api/make-subtask', {
+      subtaskIssueKey: subtaskIssueKey,
+      parentIssueKey: parentIssueKey,
+      config,
+    });
+    toast({
+      title: `Issue ${subtaskIssueKey} has been converted into a subtask of ${parentIssueKey}.`,
+      status: 'success',
+      duration: 3000,
+      isClosable: true,
+    });
+    fetchIssuesData();
+  } catch (error: any) {
+    console.error('Error converting to subtask:', error);
+    toast({
+      title: 'Failed to convert issue to subtask.',
+      description: error.response?.data?.error || 'Please try again later.',
+      status: 'error',
+      duration: 3000,
+      isClosable: true,
+    });
+  }
+};
+
 
   /**
    * Handles ignoring issues but offering to mark them as duplicates in Jira.

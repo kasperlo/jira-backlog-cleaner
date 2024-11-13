@@ -1,4 +1,4 @@
-// jira-backlog-cleaner/app/api/make-subtask/route.ts
+// app/api/make-subtask/route.ts
 
 import { NextResponse } from 'next/server';
 import JiraClient from 'jira-client';
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
 
     // Fetch details of parent and subtask issues
     const parentIssue = await jira.findIssue(parentIssueKey, '', 'summary,project,issuetype');
-    const subtaskIssue = await jira.findIssue(subtaskIssueKey, '', 'summary,project,description');
+    const subtaskIssue = await jira.findIssue(subtaskIssueKey, '', 'summary,project,description,subtasks');
 
     // Ensure the parent and subtask are in the same project
     if (parentIssue.fields.project.key !== subtaskIssue.fields.project.key) {
@@ -60,8 +60,6 @@ export async function POST(request: Request) {
       expand: 'projects.issuetypes.fields',
     });
 
-    console.log('Create Metadata:', JSON.stringify(createMeta, null, 2));
-
     // Find the issue type ID for 'Sub-task' or 'Deloppgave'
     let subtaskIssueTypeId: string | undefined;
     const projectMeta = (createMeta.projects as ProjectMeta[]).find(
@@ -86,32 +84,38 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create a new subtask under the parent issue
-    const newSubtask = await jira.addNewIssue({
+    // Reassign subtasks of the issue being converted to the parent issue
+    if (subtaskIssue.fields.subtasks && subtaskIssue.fields.subtasks.length > 0) {
+      for (const subtask of subtaskIssue.fields.subtasks) {
+        // Update the parent of each subtask to be the parentIssueKey
+        await jira.updateIssue(subtask.key, {
+          fields: {
+            parent: {
+              key: parentIssueKey,
+            },
+          },
+        });
+      }
+    }
+
+    // Convert the issue into a subtask under the parent issue
+    await jira.updateIssue(subtaskIssueKey, {
       fields: {
-        project: {
-          key: projectKey,
-        },
         parent: {
           key: parentIssueKey,
         },
-        summary: subtaskIssue.fields.summary,
-        description: subtaskIssue.fields.description || '',
         issuetype: {
           id: subtaskIssueTypeId,
         },
       },
     });
 
-    // Delete the original issue if subtask creation is successful
-    await jira.deleteIssue(subtaskIssueKey);
-
     return NextResponse.json({
       message: 'Issue converted to subtask successfully.',
-      newSubtaskKey: newSubtask.key,
+      newSubtaskKey: subtaskIssueKey,
     }, { status: 200 });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error while promoting to Epic.';
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error while converting to subtask.';
     console.error('Error converting issue to subtask:', errorMessage);
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }

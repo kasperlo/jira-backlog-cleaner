@@ -127,7 +127,7 @@ const JiraConfigForm = () => {
                             name="projectKey"
                             value={localConfig.projectKey}
                             onChange={handleChange}
-                            placeholder="BG"
+                            placeholder="Project Key (i.e. 'BG')"
                         />
                     </FormControl>
 

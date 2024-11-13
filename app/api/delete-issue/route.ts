@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import JiraClient from 'jira-client';
-import { JiraIssue, SubtaskAction } from '@/types/types';
+import { JiraIssue } from '@/types/types';
 
 export async function POST(request: Request) {
   try {
