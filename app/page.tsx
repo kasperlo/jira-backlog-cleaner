@@ -11,6 +11,7 @@ import { useActionHandlers } from '../hooks/useActionHandlers';
 import { IssuesList } from '../components/IssuesList';
 import { DuplicatesList } from '../components/DuplicatesList';
 import { ConfirmationModal } from '../components/ConfirmationModal';
+import { SubtaskModal } from '../components/SubtaskModal';
 import { DuplicateGroup, SuggestedIssue } from '../types/types';
 import { useEffect, useState } from 'react';
 import { IssueListSkeleton } from '@/components/IssueListSkeleton';
@@ -42,8 +43,10 @@ export default function HomePage() {
     actionType,
     suggestion,
     subtasks,
-    isOpen,
-    onClose,
+    isConfirmationOpen,
+    onConfirmationClose,
+    isSubtaskModalOpen,
+    onSubtaskModalClose,
     openConfirmationModal,
     handleAction,
     handleSubtaskAction,
@@ -51,6 +54,7 @@ export default function HomePage() {
     onExplain,
     onSuggestSummary,
     onEditSummary,
+    setSubtasks,
   } = useActionHandlers(fetchIssuesData, issues, setDuplicates);
 
   useEffect(() => {
@@ -141,18 +145,29 @@ export default function HomePage() {
             )}
           </Box>
 
+          {/* Include SubtaskModal */}
+          {subtasks && subtasks.length > 0 && (
+            <SubtaskModal
+              isOpen={isSubtaskModalOpen}
+              onClose={() => {
+                setSubtasks(null);
+                onSubtaskModalClose();
+              }}
+              subtasks={subtasks}
+              handleSubtaskAction={handleSubtaskAction}
+              actionInProgress={actionInProgress}
+            />
+          )}
+
+          {/* Existing ConfirmationModal */}
           <ConfirmationModal
-            isOpen={isOpen}
-            onClose={onClose}
+            isOpen={isConfirmationOpen}
+            onClose={onConfirmationClose}
             actionType={actionType}
             selectedGroup={selectedGroup}
             suggestion={suggestion}
             handleAction={handleAction}
             actionInProgress={actionInProgress}
-            subtasks={subtasks}
-            handleSubtaskAction={handleSubtaskAction}
-            setSubtasks={() => {
-            }}
           />
         </>
       )}

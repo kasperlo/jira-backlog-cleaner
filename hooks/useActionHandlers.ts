@@ -7,6 +7,8 @@ import {
   ActionType,
   DuplicateGroup,
   JiraIssue,
+  Subtask,
+  SubtaskAction,
   Suggestion,
 } from '../types/types';
 import { useJira } from '../context/JiraContext';
@@ -22,16 +24,29 @@ export function useActionHandlers(
   const [selectedGroup, setSelectedGroup] = useState<DuplicateGroup | null>(null);
   const [actionType, setActionType] = useState<ActionType | null>(null);
   const [suggestion, setSuggestion] = useState<ActionSuggestion | null>(null);
-  const [subtasks, setSubtasks] = useState<JiraIssue[] | null>(null);
+  const [subtasks, setSubtasks] = useState<Subtask[] | null>(null);
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [selectedIssueKey, setSelectedIssueKey] = useState<string | null>(null);
+
+  const {
+    isOpen: isConfirmationOpen,
+    onOpen: onConfirmationOpen,
+    onClose: onConfirmationClose,
+  } = useDisclosure();
+
+  const {
+    isOpen: isSubtaskModalOpen,
+    onOpen: onSubtaskModalOpen,
+    onClose: onSubtaskModalClose,
+  } = useDisclosure();
 
   /**
    * Opens the confirmation modal and fetches action suggestions if merging.
    * @param group - The group of duplicate issues selected.
    * @param type - The type of action ('merge', 'notDuplicate', 'ignore').
    */
-  const openConfirmationModal = async (group: DuplicateGroup, type: ActionType) => {
+   const openConfirmationModal = async (group: DuplicateGroup, type: ActionType) => {
     setSelectedGroup(group);
     setActionType(type);
 
@@ -57,7 +72,7 @@ export function useActionHandlers(
       setSuggestion(null);
     }
 
-    onOpen();
+    onConfirmationOpen(); // Use the correct function
   };
 
   /**
@@ -368,59 +383,7 @@ export function useActionHandlers(
     }
   };
 
-  /**
-   * Handles actions related to subtasks (delete or convert).
-   * @param parentIssueKey - The key of the parent issue.
-   * @param action - The action to perform ('delete' or 'convert').
-   */
-  const handleSubtaskAction = async (parentIssueKey: string, action: 'delete' | 'convert') => {
-    if (!subtasks || subtasks.length === 0 || !config) return;
-
-    setActionInProgress(true);
-    try {
-      if (action === 'delete') {
-        // Delete all subtasks
-        for (const subtask of subtasks) {
-          await handleDeleteIssueResponse(subtask.key, false); // Pass false to skip confirmation
-        }
-        toast({
-          title: `All subtasks of ${parentIssueKey} have been deleted.`,
-          status: 'info',
-          duration: 3000,
-          isClosable: true,
-        });
-      } else if (action === 'convert') {
-        // Convert all subtasks to separate tasks
-        for (const subtask of subtasks) {
-          await axios.post('/api/convert-to-task', {
-            issueKey: subtask.key,
-            config,
-          });
-        }
-        toast({
-          title: `All subtasks of ${parentIssueKey} have been converted to separate tasks.`,
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-        fetchIssuesData();
-      }
-    } catch (error: any) {
-      console.error(`Error performing subtask action (${action}):`, error);
-      toast({
-        title: `Failed to ${action} subtasks.`,
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    } finally {
-      setActionInProgress(false);
-      setSubtasks(null);
-      onClose();
-    }
-  };
-
-  /**
+ /**
    * Deletes a Jira issue by calling the backend API.
    * @param issueKey - The key of the issue to delete.
    * @param confirmPrompt - Whether to show confirmation prompt (default true).
@@ -433,18 +396,68 @@ export function useActionHandlers(
 
     setActionInProgress(true);
     try {
-      await axios.post('/api/delete-issue', { issueKey, config });
+      const response = await axios.post('/api/delete-issue', { issueKey, config });
+
+      // Only show success toast if response status is 200
+      if (response.status === 200) {
+        toast({
+          title: `Issue ${issueKey} deleted successfully.`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+        fetchIssuesData();
+      } else {
+        throw new Error(response.data.error || 'Failed to delete issue.');
+      }
+    } catch (error: any) {
+      if (error.response?.status === 400 && error.response?.data?.subtasks) {
+        // Issue has subtasks and requires action
+        setSubtasks(error.response.data.subtasks);
+        setSelectedIssueKey(issueKey);
+        onSubtaskModalOpen(); // Use the correct function
+      } else {
+        console.error('Error deleting issue:', error);
+        toast({
+          title: 'Failed to delete issue.',
+          description: error.response?.data?.error || 'Please try again later.',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+  
+
+  /**
+   * Handles actions related to subtasks (delete or convert).
+   * @param subtaskActions - Array of actions to perform on subtasks.
+   */
+  const handleSubtaskAction = async (subtaskActions: SubtaskAction[]) => {
+    if (!selectedIssueKey) return;
+
+    setActionInProgress(true);
+    try {
+      await axios.post('/api/delete-issue', {
+        issueKey: selectedIssueKey,
+        subtaskActions,
+        config,
+      });
+
       toast({
-        title: `Issue ${issueKey} deleted successfully.`,
+        title: `Issue ${selectedIssueKey} and specified subtasks have been processed successfully.`,
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
       fetchIssuesData();
     } catch (error: any) {
-      console.error('Error deleting issue:', error);
+      console.error('Error processing subtasks:', error);
       toast({
-        title: 'Failed to delete issue.',
+        title: 'Failed to process subtasks.',
         description: error.response?.data?.error || 'Please try again later.',
         status: 'error',
         duration: 3000,
@@ -452,6 +465,9 @@ export function useActionHandlers(
       });
     } finally {
       setActionInProgress(false);
+      setSubtasks(null);
+      setSelectedIssueKey(null);
+      onClose();
     }
   };
 
@@ -516,9 +532,12 @@ export function useActionHandlers(
     actionType,
     suggestion,
     subtasks,
-    isOpen,
-    onOpen,
-    onClose,
+    isConfirmationOpen,
+    onConfirmationOpen,
+    onConfirmationClose,
+    isSubtaskModalOpen,
+    onSubtaskModalOpen,
+    onSubtaskModalClose,
     openConfirmationModal,
     handleAction,
     handleSubtaskAction,
@@ -526,5 +545,6 @@ export function useActionHandlers(
     onExplain,
     onSuggestSummary,
     onEditSummary,
+    setSubtasks,
   };
 }

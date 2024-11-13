@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     console.log('Retrieving similar issues using Pinecone...');
     const similarIssues: JiraIssue[] = await retrieveSimilarIssues(queryEmbedding, 10);
 
-    const similarityThreshold = 0.6;
+    const similarityThreshold = 0.3;
     const isRelevant = similarIssues.some((issue) => issue.fields.similarity! >= similarityThreshold);
     if (!isRelevant) {
       return NextResponse.json({ error: 'The project description does not appear to be correct.' }, { status: 400 });

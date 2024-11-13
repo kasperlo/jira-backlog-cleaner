@@ -123,3 +123,13 @@ export interface ProjectMeta {
   key: string;
   issuetypes: IssueType[];
 }
+
+export interface Subtask {
+  key: string;
+  summary: string;
+}
+
+export interface SubtaskAction {
+  subtaskKey: string;
+  action: 'delete' | 'convert';
+}
