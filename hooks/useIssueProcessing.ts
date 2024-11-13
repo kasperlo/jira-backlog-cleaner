@@ -1,8 +1,8 @@
 // hooks/useIssueProcessing.ts
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import axios from 'axios';
-import { JiraIssue, ProgressData, JiraConfig } from '../types/types';
+import { JiraIssue } from '../types/types';
 import { useJira } from '../context/JiraContext';
 import { useToast } from '@chakra-ui/react';
 
@@ -10,15 +10,8 @@ export function useIssueProcessing() {
   const { config } = useJira();
   const [issues, setIssues] = useState<JiraIssue[]>([]);
   const [processing, setProcessing] = useState<boolean>(false);
-  const [progress, setProgress] = useState<ProgressData>({
-    total: 0,
-    completed: 0,
-    status: 'idle',
-  });
-  const [progressPercentage, setProgressPercentage] = useState<number>(0);
   const [error, setError] = useState<string>('');
   const toast = useToast();
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const startProcessing = async () => {
     if (!config) {
@@ -33,11 +26,6 @@ export function useIssueProcessing() {
     }
 
     setProcessing(true);
-    setProgress({
-      total: 0,
-      completed: 0,
-      status: 'processing',
-    });
     setIssues([]);
     setError('');
 
@@ -47,128 +35,78 @@ export function useIssueProcessing() {
         action: 'process',
       });
 
-      if (response.status === 202) {
+      if (response.status === 200) {
+        const { issues } = response.data;
+        setIssues(issues);
+
         toast({
-          title: 'Processing Started',
-          description: 'Issue processing has begun.',
-          status: 'info',
-          duration: 3000,
+          title: 'Processing Completed',
+          description: `${issues.length} issues have been processed successfully.`,
+          status: 'success',
+          duration: 5000,
           isClosable: true,
         });
-
-        // Start polling progress and issues
-        startPolling();
       } else {
-        throw new Error('Failed to start processing.');
+        throw new Error(response.data.error || 'Failed to process issues.');
       }
     } catch (error: any) {
-      console.error('Error starting processing:', error);
-      setProcessing(false);
+      console.error('Error processing issues:', error);
+      setError(error.message || 'Failed to process issues.');
       toast({
         title: 'Error',
-        description: error.message || 'Failed to start processing.',
+        description: error.message || 'Failed to process issues.',
         status: 'error',
         duration: 5000,
         isClosable: true,
       });
+    } finally {
+      setProcessing(false);
     }
   };
-
-  const startPolling = () => {
-    // Clear any existing intervals
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
+  const fetchIssuesData = async () => {
+    if (!config) {
+      toast({
+        title: 'Jira configuration missing.',
+        description: 'Please configure your Jira settings first.',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+      return;
     }
 
-    pollingIntervalRef.current = setInterval(async () => {
-      try {
-        // Fetch progress
-        const progressResponse = await axios.get('/api/progress');
-        const progressData: ProgressData = progressResponse.data;
-        setProgress(progressData);
+    setProcessing(true);
+    setIssues([]);
+    setError('');
 
-        // Update progress percentage
-        const percentage =
-          progressData.total > 0 ? (progressData.completed / progressData.total) * 100 : 0;
-        setProgressPercentage(percentage);
+    try {
+      const response = await axios.post('/api/issues', {
+        config,
+        action: 'fetch', // Make sure your backend supports this action
+      });
 
-        // Fetch processed issues
-        const issuesResponse = await axios.post('/api/issues', {
-          config,
-          action: 'fetchProcessedIssues',
-        });
-        setIssues(issuesResponse.data.issues || []);
+      if (response.status === 200) {
+        const { issues } = response.data;
+        setIssues(issues);
 
-        // Check if processing is completed or errored
-        if (progressData.status === 'completed') {
-          clearInterval(pollingIntervalRef.current!);
-          pollingIntervalRef.current = null;
-          setProcessing(false);
-          toast({
-            title: 'Processing Completed',
-            description: `${issuesResponse.data.issues.length} issues have been processed successfully.`,
-            status: 'success',
-            duration: 5000,
-            isClosable: true,
-          });
-        } else if (progressData.status === 'error') {
-          clearInterval(pollingIntervalRef.current!);
-          pollingIntervalRef.current = null;
-          setProcessing(false);
-          toast({
-            title: 'Processing Error',
-            description: progressData.errorMessage || 'An error occurred during processing.',
-            status: 'error',
-            duration: 5000,
-            isClosable: true,
-          });
-        }
-      } catch (error) {
-        console.error('Error during polling:', error);
-        clearInterval(pollingIntervalRef.current!);
-        pollingIntervalRef.current = null;
-        setProcessing(false);
         toast({
-          title: 'Error',
-          description: 'An error occurred during polling.',
-          status: 'error',
+          title: 'Issues Fetched',
+          description: `${issues.length} issues have been fetched successfully.`,
+          status: 'success',
           duration: 5000,
           isClosable: true,
         });
+      } else {
+        throw new Error(response.data.error || 'Failed to fetch issues.');
       }
-    }, 2000); // Poll every 2 seconds
-  };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
-  }, []);
-
-  const fetchIssuesData = async () => {
-    if (!config) return;
-    setProcessing(true);
-    setError('');
-    try {
-      const response = await axios.post('/api/issues', { config, action: 'fetch' });
-      setIssues(response.data.issues || []);
+    } catch (error: any) {
+      console.error('Error fetching issues:', error);
+      setError(error.message || 'Failed to fetch issues.');
       toast({
-        title: 'Issues fetched successfully.',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (err: any) {
-      console.error('Error fetching issues:', err);
-      setError('Failed to fetch Jira issues. Please check your configuration.');
-      toast({
-        title: 'Error fetching issues.',
-        description: 'Please check your Jira configuration and try again.',
+        title: 'Error',
+        description: error.message || 'Failed to fetch issues.',
         status: 'error',
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
       });
     } finally {
@@ -179,10 +117,8 @@ export function useIssueProcessing() {
   return {
     issues,
     processing,
-    progress,
-    progressPercentage,
     error,
     startProcessing,
-    fetchIssuesData,
+    fetchIssuesData, // Add it back here
   };
 }
