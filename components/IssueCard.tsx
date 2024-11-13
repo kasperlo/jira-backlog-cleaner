@@ -1,5 +1,3 @@
-// components/IssueCard.tsx
-
 import { Box, Text, VStack, HStack } from '@chakra-ui/react';
 import { JiraIssue, Subtask } from '../types/types';
 import { IssueTypeBadge } from './IssueTypeBadge';
@@ -11,10 +9,11 @@ interface IssueCardProps {
 }
 
 export const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
-    const issueType = issue.fields.issuetype.name;
+    // Check if issue fields and issuetype exist to avoid runtime errors
+    const issueType = issue.fields?.issuetype?.name || 'Unknown';
     const issueTypeColors = issueTypeColorMap[issueType] || { bg: 'gray', color: 'white' };
     const issueTypeIcon = issueTypeIconMap[issueType];
-    const subtasks: Subtask[] = issue.fields.subtasks || []; // Explicitly type as JiraSubtask[]
+    const subtasks: Subtask[] = issue.fields?.subtasks || []; // Explicitly type as JiraSubtask[]
 
     // Determine heights based on presence of subtasks
     const hasSubtasks = subtasks.length > 0;
@@ -52,7 +51,7 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                     </HStack>
                     {/* Right: Created Date */}
                     <Text fontSize="sm">
-                        Created: {new Date(issue.fields.created).toLocaleDateString()}
+                        Created: {issue.fields?.created ? new Date(issue.fields.created).toLocaleDateString() : 'N/A'}
                     </Text>
                 </HStack>
             </Box>
@@ -62,11 +61,11 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                 <VStack align="start" spacing={2} height="100%">
                     {/* Issue Summary */}
                     <Text fontSize="lg" fontWeight="bold">
-                        {issue.fields.summary}
+                        {issue.fields?.summary || 'No summary available'}
                     </Text>
 
                     {/* Issue Description */}
-                    {issue.fields.description && (
+                    {issue.fields?.description && (
                         <Text color="gray.600">
                             {issue.fields.description}
                         </Text>
