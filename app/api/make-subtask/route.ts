@@ -2,7 +2,6 @@
 
 import { NextResponse } from 'next/server';
 import JiraClient from 'jira-client';
-import { ProjectMeta } from '@/types/types';
 
 export async function POST(request: Request) {
   try {
@@ -30,17 +29,9 @@ export async function POST(request: Request) {
       strictSSL: true,
     });
 
-    // Fetch details of parent and subtask issues
+    // Fetch details of parent and original issues
     const parentIssue = await jira.findIssue(parentIssueKey, '', 'summary,project,issuetype');
-    const subtaskIssue = await jira.findIssue(subtaskIssueKey, '', 'summary,project,description,subtasks');
-
-    // Ensure the parent and subtask are in the same project
-    if (parentIssue.fields.project.key !== subtaskIssue.fields.project.key) {
-      return NextResponse.json(
-        { error: 'The parent issue and subtask issue must be in the same project.' },
-        { status: 400 }
-      );
-    }
+    const originalIssue = await jira.findIssue(subtaskIssueKey, '', 'summary,project,description,subtasks');
 
     // Check if parent issue type supports subtasks
     const parentIssueType = parentIssue.fields.issuetype.name;
@@ -53,24 +44,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // Fetch create metadata to get the issue type ID for 'Sub-task' or 'Deloppgave'
+    // Fetch create metadata to get the issue type ID for 'Sub-task'
     const projectKey = parentIssue.fields.project.key;
     const createMeta = await jira.getIssueCreateMetadata({
       projectKeys: [projectKey],
       expand: 'projects.issuetypes.fields',
     });
 
-    // Find the issue type ID for 'Sub-task' or 'Deloppgave'
+    // Find the issue type ID for 'Sub-task'
     let subtaskIssueTypeId: string | undefined;
-    const projectMeta = (createMeta.projects as ProjectMeta[]).find(
-      (proj) => proj.key === projectKey
+    const projectMeta = createMeta.projects.find(
+      (proj: any) => proj.key === projectKey
     );
 
     if (projectMeta) {
       const subtaskIssueType = projectMeta.issuetypes.find(
-        (it) =>
-          it.name.toLowerCase() === 'sub-task' ||
-          it.name.toLowerCase() === 'deloppgave'
+        (it: any) => it.subtask === true
       );
       if (subtaskIssueType) {
         subtaskIssueTypeId = subtaskIssueType.id;
@@ -79,44 +68,49 @@ export async function POST(request: Request) {
 
     if (!subtaskIssueTypeId) {
       return NextResponse.json(
-        { error: "Neither 'Sub-task' nor 'Deloppgave' issue type found in the project. Ensure that the correct issue type is available in the project's issue type scheme." },
+        { error: "Sub-task issue type not found in the project. Ensure that the 'Sub-task' issue type is available in the project's issue type scheme." },
         { status: 400 }
       );
     }
 
-    // Reassign subtasks of the issue being converted to the parent issue
-    if (subtaskIssue.fields.subtasks && subtaskIssue.fields.subtasks.length > 0) {
-      for (const subtask of subtaskIssue.fields.subtasks) {
-        // Update the parent of each subtask to be the parentIssueKey
+    // Prepare fields for the new subtask
+    const newSubtaskData = {
+      fields: {
+        project: { key: projectKey },
+        parent: { key: parentIssueKey },
+        summary: originalIssue.fields.summary,
+        description: originalIssue.fields.description,
+        issuetype: { id: subtaskIssueTypeId },
+      },
+    };
+
+    // Create the new subtask
+    const newSubtask = await jira.addNewIssue(newSubtaskData);
+
+    // Reassign subtasks of the original issue to the new subtask, if any
+    if (originalIssue.fields.subtasks && originalIssue.fields.subtasks.length > 0) {
+      for (const subtask of originalIssue.fields.subtasks) {
         await jira.updateIssue(subtask.key, {
           fields: {
             parent: {
-              key: parentIssueKey,
+              key: newSubtask.key,
             },
           },
         });
       }
     }
 
-    // Convert the issue into a subtask under the parent issue
-    await jira.updateIssue(subtaskIssueKey, {
-      fields: {
-        parent: {
-          key: parentIssueKey,
-        },
-        issuetype: {
-          id: subtaskIssueTypeId,
-        },
-      },
-    });
+    // Delete the original issue
+    await jira.deleteIssue(subtaskIssueKey);
 
     return NextResponse.json({
-      message: 'Issue converted to subtask successfully.',
-      newSubtaskKey: subtaskIssueKey,
+      message: 'Subtask created under the parent issue successfully, and the original issue was deleted.',
+      newSubtaskKey: newSubtask.key,
     }, { status: 200 });
+
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error while converting to subtask.';
-    console.error('Error converting issue to subtask:', errorMessage);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error while creating subtask.';
+    console.error('Error creating subtask:', errorMessage);
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

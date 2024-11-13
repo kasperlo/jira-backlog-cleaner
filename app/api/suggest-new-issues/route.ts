@@ -18,7 +18,7 @@ const suggestionSchema = {
     properties: {
       summary: { type: 'string' },
       description: { type: 'string' },
-      issuetype: { type: 'string', enum: ['Story', 'Task', 'Sub-task'] },
+      issuetype: { type: 'string', enum: ['Story', 'Task', 'Subtask'] },
       explanation: { type: 'string' },
     },
     required: ['summary', 'description', 'issuetype', 'explanation'],
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     console.log('Retrieving similar issues using Pinecone...');
     const similarIssues: JiraIssue[] = await retrieveSimilarIssues(queryEmbedding, 10);
 
-    const similarityThreshold = 0.3;
+    const similarityThreshold = 0.1;
     const isRelevant = similarIssues.some((issue) => issue.fields.similarity! >= similarityThreshold);
     if (!isRelevant) {
       return NextResponse.json({ error: 'The project description does not appear to be correct.' }, { status: 400 });
@@ -105,7 +105,7 @@ You are a project management assistant. Based on the following project descripti
    - Each suggested issue must include:
      - **"summary"**: A concise summary of the issue.
      - **"description"**: A detailed description of the issue.
-     - **"issuetype"**: The type of issue ("Task", "Story", "Sub-task", etc.). Do not include "Epic".
+     - **"issuetype"**: The type of issue ("Task", "Story", "Subtask", etc.). Do not include "Epic".
      - **"explanation"**: A brief explanation of why this issue is suggested and which uncovered area of the project it addresses.
 
 5. **Format:**

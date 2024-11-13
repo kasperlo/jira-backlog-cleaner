@@ -1,8 +1,18 @@
 // components/DuplicatesList.tsx
 
-import { Box, Heading, Text, ButtonGroup, Button } from '@chakra-ui/react';
+import {
+    Box,
+    Heading,
+    Text,
+    ButtonGroup,
+    Button,
+    Flex,
+    VStack,
+} from '@chakra-ui/react';
 import { DuplicateGroup } from '../types/types';
-import { IssueList } from './IssueList';
+import { IssueCard } from './IssueCard';
+import { useState } from 'react';
+import { SimilarityBar } from './SimilarityBar';
 
 interface DuplicatesListProps {
     duplicates: DuplicateGroup[];
@@ -25,38 +35,80 @@ export function DuplicatesList({
     onEditSummary,
     actionInProgress,
 }: DuplicatesListProps) {
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const totalPairs = duplicates.length;
+
+    const currentGroup = duplicates[currentIndex];
+
+    const goToPrevious = () => {
+        setCurrentIndex((prev) => (prev > 0 ? prev - 1 : prev));
+    };
+
+    const goToNext = () => {
+        setCurrentIndex((prev) => (prev < totalPairs - 1 ? prev + 1 : prev));
+    };
+
+    if (!currentGroup) {
+        return <Text>No duplicate issues detected.</Text>;
+    }
+
+    const similarityScore = currentGroup.similarityScore;
+
     return (
         <Box mb={4}>
-            <Heading size="md">Potential Duplicate Pairs</Heading>
-            {duplicates.map((dupGroup, index) => (
-                <Box key={index} borderWidth="1px" borderRadius="md" p={4} mb={2}>
-                    <Text fontWeight="bold">Pair {index + 1}</Text>
-                    <Text fontStyle="italic" mb={2}>
-                        {dupGroup.explanation}
-                    </Text>
-                    <IssueList
-                        issues={dupGroup.group}
-                        onDelete={() => Promise.resolve()} // Dummy function since delete is not needed
-                        onExplain={onExplain}
-                        onSuggestSummary={onSuggestSummary}
-                        onEditSummary={onEditSummary}
-                        actionInProgress={actionInProgress}
-                    />
-                    <ButtonGroup mt={4}>
-                        <Button
-                            colorScheme="blue"
-                            onClick={() => onMerge(dupGroup)}
-                            isLoading={actionInProgress}
-                        >
-                            Merge Issues
-                        </Button>
-                        <Button onClick={() => onNotDuplicate(dupGroup)}>Not Duplicates</Button>
-                        <Button variant="ghost" onClick={() => onIgnore(dupGroup)}>
-                            Ignore
-                        </Button>
-                    </ButtonGroup>
-                </Box>
-            ))}
+            <Heading size="md" mb={4}>
+                Potential Duplicate Pairs ({currentIndex + 1} of {totalPairs})
+            </Heading>
+
+            {/* Pagination Controls */}
+            <Flex justifyContent="space-between" alignItems="center" mb={4}>
+                <Button onClick={goToPrevious} isDisabled={currentIndex === 0}>
+                    Previous
+                </Button>
+                <Text>
+                    Pair {currentIndex + 1} of {totalPairs}
+                </Text>
+                <Button onClick={goToNext} isDisabled={currentIndex === totalPairs - 1}>
+                    Next
+                </Button>
+            </Flex>
+
+            {/* Similarity Bar */}
+            <SimilarityBar similarityScore={similarityScore} />
+
+            {/* Issue Cards */}
+            <Flex justifyContent="space-between" alignItems="flex-start" wrap="wrap">
+                {currentGroup.group.map((issue) => (
+                    <IssueCard key={issue.id} issue={issue} />
+                ))}
+            </Flex>
+
+            {/* Action Buttons */}
+            <VStack spacing={4} mt={4}>
+                <ButtonGroup>
+                    <Button
+                        colorScheme="teal"
+                        onClick={() => onMerge(currentGroup)}
+                        isLoading={actionInProgress}
+                    >
+                        Get Merge Suggestion
+                    </Button>
+                    <Button
+                        colorScheme="blue"
+                        onClick={() => onNotDuplicate(currentGroup)}
+                        isLoading={actionInProgress}
+                    >
+                        Mark as Duplicates in Jira
+                    </Button>
+                    <Button
+                        variant="outline"
+                        onClick={() => onIgnore(currentGroup)}
+                        isLoading={actionInProgress}
+                    >
+                        Ignore
+                    </Button>
+                </ButtonGroup>
+            </VStack>
         </Box>
     );
 }

@@ -40,7 +40,9 @@ export type ActionType = 'merge' | 'notDuplicate' | 'ignore';
 export interface DuplicateGroup {
   group: JiraIssue[];
   explanation: string;
+  similarityScore: number; // Add this line
 }
+
 
 export interface ActionSuggestion {
   action: 1 | 2 | 3 | 4;
@@ -77,7 +79,7 @@ export interface PineconeVector {
 export interface SuggestedIssue {
   summary: string;
   description: string;
-  issuetype: 'Story' | 'Task' | 'Sub-task';
+  issuetype: 'Story' | 'Task' | 'Subtask';
   explanation: string;
 }
 
@@ -125,9 +127,18 @@ export interface ProjectMeta {
 }
 
 export interface Subtask {
+  id: string;
   key: string;
-  summary: string;
+  fields: {
+      summary: string;
+      description?: string;
+      issuetype: {
+          name: string;
+      };
+      // Add other fields if necessary
+  };
 }
+
 
 export interface SubtaskAction {
   subtaskKey: string;

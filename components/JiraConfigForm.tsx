@@ -19,7 +19,7 @@ import { useJira } from '../context/JiraContext';
 import { JiraConfig } from '../types/types';
 
 const JiraConfigForm = () => {
-    const { setConfig } = useJira();
+    const { setConfig, setProjectTitle } = useJira(); // Updated to include setProjectTitle
     const [localConfig, setLocalConfig] = useState<JiraConfig>({
         jiraEmail: '',
         jiraApiToken: '',
@@ -68,14 +68,13 @@ const JiraConfigForm = () => {
 
             if (response.data.success) {
                 setConfig(localConfig);
+                setProjectTitle(response.data.projectTitle); // Store the project title
             } else {
                 setError(response.data.message);
             }
         } catch (err: unknown) {
             const errorMessage =
-                err instanceof Error
-                    ? err.message
-                    : 'Failed to validate Jira configuration.';
+                err instanceof Error ? err.message : 'Failed to validate Jira configuration.';
             console.error('Error validating Jira configuration:', errorMessage);
             setError(errorMessage);
         } finally {

@@ -70,8 +70,8 @@ You are a project management assistant. Analyze the following Jira issues for de
 
 ### Hierarchy Rules:
 - **Epics** can have Tasks, Stories, and Bugs as child issues.
-- **Tasks**, **Stories**, and **Bugs** can have Sub-tasks as child issues.
-- **Sub-tasks** cannot have child issues.
+- **Tasks**, **Stories**, and **Bugs** can have Subtasks as child issues.
+- **Subtasks** cannot have child issues.
 
 ### Possible Actions:
 1. **Delete One Issue and Keep the Other**: Remove the least descriptive or redundant issue and keep the more descriptive one.

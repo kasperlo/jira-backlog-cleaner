@@ -3,17 +3,24 @@
 import {
     ListItem,
     Text,
-    VStack,
     HStack,
+    Button,
+    Box,
     useDisclosure,
 } from '@chakra-ui/react';
 import { JiraIssue } from '../types/types';
 import { IssueModal } from './IssueModal';
 import { useState } from 'react';
+import { IssueTypeBadge } from './IssueTypeBadge';
+import { issueTypeColorMap, issueTypeIconMap } from '@/utils/issueTypeMappings';
 
 interface IssueItemProps {
     issue: JiraIssue;
-    onDelete: (issueKey: string) => Promise<void>;
+    onDelete: (
+        issueKey: string,
+        confirmPrompt?: boolean,
+        onSuccess?: () => void
+    ) => Promise<void>;
     onExplain: (issueKey: string) => Promise<string>;
     onSuggestSummary: (issueKey: string) => Promise<string>;
     onEditSummary: (issueKey: string, newSummary: string) => Promise<void>;
@@ -27,10 +34,16 @@ export function IssueItem({
     onSuggestSummary,
     onEditSummary,
 }: IssueItemProps) {
-    const { isOpen, onClose } = useDisclosure();
+    const { isOpen, onOpen, onClose } = useDisclosure();
     const [explanation, setExplanation] = useState('');
     const [suggestedSummary, setSuggestedSummary] = useState('');
     const [isFetching, setIsFetching] = useState(false);
+
+    const issueType = issue.fields.issuetype.name;
+
+    const issueTypeColors = issueTypeColorMap[issue.fields.issuetype.name] || { bg: 'gray', color: 'white' };
+
+    const issueTypeIcon = issueTypeIconMap[issue.fields.issuetype.name];
 
     const handleExplain = async () => {
         setIsFetching(true);
@@ -46,18 +59,36 @@ export function IssueItem({
         setIsFetching(false);
     };
 
+    const handleDelete = async () => {
+        await onDelete(issue.key, true, onClose);
+    };
+
     return (
-        <ListItem borderWidth="1px" borderRadius="md" p={4}>
-            <HStack justify="space-between" align="start">
-                <VStack align="start" spacing={2}>
-                    <Text fontWeight="bold">
-                        {issue.key}: {issue.fields.summary}
-                    </Text>
-                    <Text fontSize="sm" color="gray.500">
-                        Type: {issue.fields.issuetype.name} | Created:{' '}
-                        {new Date(issue.fields.created).toLocaleDateString()}
-                    </Text>
-                </VStack>
+        <ListItem borderBottomWidth="1px">
+            <HStack spacing={4} p={4} alignItems="start" wrap="wrap">
+                <Box flex="1" minW="100px">
+                    <IssueTypeBadge
+                        issueType={issueType}
+                        icon={issueTypeIcon}
+                        bgColor={issueTypeColors.bg}
+                        textColor={issueTypeColors.color}
+                        size="lg" // Use size 'md' for IssueItem
+                    />
+                </Box>
+                <Box flex="1" minW="100px">
+                    <Text fontWeight="bold">{issue.key}</Text>
+                </Box>
+                <Box flex="3" minW="200px">
+                    <Text>{issue.fields.summary}</Text>
+                </Box>
+                <Box flex="1" minW="100px">
+                    <Text>{new Date(issue.fields.created).toLocaleDateString()}</Text>
+                </Box>
+                <Box flex="1" minW="100px">
+                    <Button size="sm" onClick={onOpen}>
+                        Details
+                    </Button>
+                </Box>
             </HStack>
 
             <IssueModal
@@ -66,7 +97,7 @@ export function IssueItem({
                 issue={issue}
                 onExplain={handleExplain}
                 onSuggestSummary={handleSuggestSummary}
-                onDelete={() => onDelete(issue.key)}
+                onDelete={handleDelete}
                 onEditSummary={(newSummary) => onEditSummary(issue.key, newSummary)}
                 explanation={explanation}
                 suggestedSummary={suggestedSummary}

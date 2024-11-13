@@ -17,6 +17,7 @@ import { useToast, useDisclosure } from '@chakra-ui/react';
 export function useActionHandlers(
   fetchIssuesData: () => Promise<void>,
   issues: JiraIssue[],
+  setIssues: React.Dispatch<React.SetStateAction<JiraIssue[]>>,
   setDuplicates: React.Dispatch<React.SetStateAction<DuplicateGroup[]>>
 ) {
   const { config } = useJira();
@@ -26,7 +27,6 @@ export function useActionHandlers(
   const [suggestion, setSuggestion] = useState<ActionSuggestion | null>(null);
   const [subtasks, setSubtasks] = useState<Subtask[] | null>(null);
   const toast = useToast();
-  const { isOpen, onOpen, onClose } = useDisclosure();
   const [selectedIssueKey, setSelectedIssueKey] = useState<string | null>(null);
 
   const {
@@ -46,7 +46,7 @@ export function useActionHandlers(
    * @param group - The group of duplicate issues selected.
    * @param type - The type of action ('merge', 'notDuplicate', 'ignore').
    */
-   const openConfirmationModal = async (group: DuplicateGroup, type: ActionType) => {
+  const openConfirmationModal = async (group: DuplicateGroup, type: ActionType) => {
     setSelectedGroup(group);
     setActionType(type);
 
@@ -72,7 +72,7 @@ export function useActionHandlers(
       setSuggestion(null);
     }
 
-    onConfirmationOpen(); // Use the correct function
+    onConfirmationOpen();
   };
 
   /**
@@ -140,7 +140,7 @@ export function useActionHandlers(
       setSelectedGroup(null);
       setActionType(null);
       setSuggestion(null);
-      onClose();
+      onConfirmationClose();
     }
   };
 
@@ -149,30 +149,37 @@ export function useActionHandlers(
    * @param keepIssueKey - The key of the issue to keep.
    * @param deleteIssueKey - The key of the issue to delete.
    */
-  const performDeleteOneIssue = async (keepIssueKey: string, deleteIssueKey: string) => {
+   const performDeleteOneIssue = async (keepIssueKey: string, deleteIssueKey: string) => {
     const confirmDelete = window.confirm(
       `Are you sure you want to delete issue ${deleteIssueKey} and keep issue ${keepIssueKey}?`
     );
     if (!confirmDelete) return;
-
+  
     try {
-      await handleDeleteIssueResponse(deleteIssueKey);
-      toast({
-        title: `Issue ${deleteIssueKey} has been deleted. Issue ${keepIssueKey} has been kept.`,
-        status: 'info',
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (error) {
+      const deleteSuccess = await handleDeleteIssueResponse(deleteIssueKey);
+      if (deleteSuccess) {
+        toast({
+          title: `Issue ${deleteIssueKey} has been deleted. Issue ${keepIssueKey} has been kept.`,
+          status: 'info',
+          duration: 3000,
+          isClosable: true,
+        });
+      } else {
+        // Deletion failed or requires subtask handling
+        // Handle accordingly or let the user know
+      }
+    } catch (error: any) {
       console.error('Error deleting issue:', error);
       toast({
         title: 'Failed to delete issue.',
+        description: error.response?.data?.error || 'Please try again later.',
         status: 'error',
         duration: 3000,
         isClosable: true,
       });
     }
   };
+  
 
   /**
    * Deletes both issues and creates a new, better-formulated issue.
@@ -216,8 +223,13 @@ export function useActionHandlers(
         config,
       });
 
+      const newIssue = response.data.issue;
+
+      // Add the new issue to local state
+      setIssues((prevIssues) => [newIssue, ...prevIssues]);
+
       toast({
-        title: `New issue ${response.data.issueKey} has been created successfully.`,
+        title: `New issue ${newIssue.key} has been created successfully.`,
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -225,18 +237,10 @@ export function useActionHandlers(
 
       // Delete the original issues
       for (const issueKey of deleteIssueKeys) {
-        await handleDeleteIssueResponse(issueKey, false); // Pass false to skip confirmation
+        await handleDeleteIssueResponse(issueKey, false);
       }
 
-      // Optionally, mark the original issues as duplicates in Jira
-      const confirmMarkDuplicates = window.confirm(
-        'Would you like to mark the deleted issues as duplicates of the new issue in Jira?'
-      );
-      if (confirmMarkDuplicates) {
-        await markIssuesAsDuplicates(issuesToDelete, response.data.issueKey);
-      }
-
-      fetchIssuesData();
+      // No need to call fetchIssuesData(); state is updated
     } catch (error: any) {
       console.error('Error performing delete and create action:', error);
       toast({
@@ -253,53 +257,64 @@ export function useActionHandlers(
    * @param parentIssueKey - The key of the parent issue.
    * @param subtaskIssueKey - The key of the issue to convert into a subtask.
    */
+  const performMakeSubtask = async (parentIssueKey: string, subtaskIssueKey: string) => {
+    const issue = issues.find((issue) => issue.key === subtaskIssueKey);
+    let hasSubtasks = false;
 
-const performMakeSubtask = async (parentIssueKey: string, subtaskIssueKey: string) => {
-  const issue = issues.find((issue) => issue.key === subtaskIssueKey);
-  let hasSubtasks = false;
+    if (issue?.fields.subtasks && issue.fields.subtasks.length > 0) {
+      hasSubtasks = true;
+    }
 
-  if (issue?.fields.subtasks && issue.fields.subtasks.length > 0) {
-    hasSubtasks = true;
-  }
+    let confirmAction = true;
+    if (hasSubtasks) {
+      confirmAction = window.confirm(
+        `Issue ${subtaskIssueKey} has subtasks. Converting it to a subtask will reassign its subtasks to the parent issue ${parentIssueKey}. Do you want to proceed?`
+      );
+    } else {
+      confirmAction = window.confirm(
+        `Are you sure you want to convert issue ${subtaskIssueKey} into a subtask of issue ${parentIssueKey}? This will nest ${subtaskIssueKey} under ${parentIssueKey}.`
+      );
+    }
 
-  let confirmAction = true;
-  if (hasSubtasks) {
-    confirmAction = window.confirm(
-      `Issue ${subtaskIssueKey} has subtasks. Converting it to a subtask will reassign its subtasks to the parent issue ${parentIssueKey}. Do you want to proceed?`
-    );
-  } else {
-    confirmAction = window.confirm(
-      `Are you sure you want to convert issue ${subtaskIssueKey} into a subtask of issue ${parentIssueKey}? This will nest ${subtaskIssueKey} under ${parentIssueKey}.`
-    );
-  }
+    if (!confirmAction) return;
 
-  if (!confirmAction) return;
+    try {
+      await axios.post('/api/make-subtask', {
+        subtaskIssueKey: subtaskIssueKey,
+        parentIssueKey: parentIssueKey,
+        config,
+      });
 
-  try {
-    await axios.post('/api/make-subtask', {
-      subtaskIssueKey: subtaskIssueKey,
-      parentIssueKey: parentIssueKey,
-      config,
-    });
-    toast({
-      title: `Issue ${subtaskIssueKey} has been converted into a subtask of ${parentIssueKey}.`,
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    });
-    fetchIssuesData();
-  } catch (error: any) {
-    console.error('Error converting to subtask:', error);
-    toast({
-      title: 'Failed to convert issue to subtask.',
-      description: error.response?.data?.error || 'Please try again later.',
-      status: 'error',
-      duration: 3000,
-      isClosable: true,
-    });
-  }
-};
+      // Fetch the updated issue details
+      const response = await axios.post('/api/get-issue', {
+        issueKey: subtaskIssueKey,
+        config,
+      });
+      const updatedIssue = response.data.issue;
 
+      // Update the issue in local state
+      setIssues((prevIssues) =>
+        prevIssues.map((issue) => (issue.key === subtaskIssueKey ? updatedIssue : issue))
+      );
+
+      toast({
+        title: `Issue ${subtaskIssueKey} has been converted into a subtask of ${parentIssueKey}.`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      // No need to call fetchIssuesData(); state is updated
+    } catch (error: any) {
+      console.error('Error converting to subtask:', error);
+      toast({
+        title: 'Failed to convert issue to subtask.',
+        description: error.response?.data?.error || 'Please try again later.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
 
   /**
    * Handles ignoring issues but offering to mark them as duplicates in Jira.
@@ -385,7 +400,7 @@ const performMakeSubtask = async (parentIssueKey: string, subtaskIssueKey: strin
           duration: 3000,
           isClosable: true,
         });
-        fetchIssuesData();
+        // Update local state if needed
       } else {
         throw new Error(response.data.error || 'Failed to link issues.');
       }
@@ -401,39 +416,47 @@ const performMakeSubtask = async (parentIssueKey: string, subtaskIssueKey: strin
     }
   };
 
- /**
+  /**
    * Deletes a Jira issue by calling the backend API.
    * @param issueKey - The key of the issue to delete.
    * @param confirmPrompt - Whether to show confirmation prompt (default true).
+   * @param onSuccess - Callback to execute on successful deletion.
    */
-  const handleDeleteIssueResponse = async (issueKey: string, confirmPrompt: boolean = true) => {
+   const handleDeleteIssueResponse = async (
+    issueKey: string,
+    confirmPrompt: boolean = true,
+    onSuccess?: () => void
+  ): Promise<boolean> => {
     const proceed = confirmPrompt
       ? window.confirm(`Are you sure you want to delete issue ${issueKey}?`)
       : true;
-    if (!proceed) return;
-
+    if (!proceed) return false;
+  
     setActionInProgress(true);
     try {
       const response = await axios.post('/api/delete-issue', { issueKey, config });
-
-      // Only show success toast if response status is 200
+  
       if (response.status === 200) {
+        setIssues((prevIssues) => prevIssues.filter((issue) => issue.key !== issueKey));
+  
         toast({
           title: `Issue ${issueKey} deleted successfully.`,
           status: 'success',
           duration: 3000,
           isClosable: true,
         });
-        fetchIssuesData();
+        if (onSuccess) {
+          onSuccess();
+        }
+        return true;
       } else {
         throw new Error(response.data.error || 'Failed to delete issue.');
       }
     } catch (error: any) {
       if (error.response?.status === 400 && error.response?.data?.subtasks) {
-        // Issue has subtasks and requires action
         setSubtasks(error.response.data.subtasks);
         setSelectedIssueKey(issueKey);
-        onSubtaskModalOpen(); // Use the correct function
+        onSubtaskModalOpen();
       } else {
         console.error('Error deleting issue:', error);
         toast({
@@ -444,6 +467,7 @@ const performMakeSubtask = async (parentIssueKey: string, subtaskIssueKey: strin
           isClosable: true,
         });
       }
+      return false;
     } finally {
       setActionInProgress(false);
     }
@@ -465,13 +489,36 @@ const performMakeSubtask = async (parentIssueKey: string, subtaskIssueKey: strin
         config,
       });
 
+      // Remove the main issue from local state
+      setIssues((prevIssues) => prevIssues.filter((issue) => issue.key !== selectedIssueKey));
+
+      // Update or remove subtasks based on actions
+      for (const action of subtaskActions) {
+        if (action.action === 'delete') {
+          setIssues((prevIssues) => prevIssues.filter((issue) => issue.key !== action.subtaskKey));
+        } else if (action.action === 'convert') {
+          // Fetch the updated issue and update local state
+          const response = await axios.post('/api/get-issue', {
+            issueKey: action.subtaskKey,
+            config,
+          });
+          const updatedIssue = response.data.issue;
+
+          setIssues((prevIssues) =>
+            prevIssues.map((issue) => (issue.key === action.subtaskKey ? updatedIssue : issue))
+          );
+        }
+      }
+
       toast({
         title: `Issue ${selectedIssueKey} and specified subtasks have been processed successfully.`,
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
-      fetchIssuesData();
+
+      // No need to call fetchIssuesData(); state is updated
+      onSubtaskModalClose();
     } catch (error: any) {
       console.error('Error processing subtasks:', error);
       toast({
@@ -485,7 +532,6 @@ const performMakeSubtask = async (parentIssueKey: string, subtaskIssueKey: strin
       setActionInProgress(false);
       setSubtasks(null);
       setSelectedIssueKey(null);
-      onClose();
     }
   };
 
@@ -526,13 +572,20 @@ const performMakeSubtask = async (parentIssueKey: string, subtaskIssueKey: strin
   const onEditSummary = async (issueKey: string, newSummary: string): Promise<void> => {
     try {
       await axios.post('/api/edit-issue-summary', { issueKey, newSummary, config });
+      // Update the issue in local state
+      setIssues((prevIssues) =>
+        prevIssues.map((issue) =>
+          issue.key === issueKey ? { ...issue, fields: { ...issue.fields, summary: newSummary } } : issue
+        )
+      );
+
       toast({
         title: 'Summary updated successfully',
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
-      fetchIssuesData(); // Refresh issue data after edit
+      // No need to fetchIssuesData(); state is updated
     } catch (error) {
       console.error('Error updating summary:', error);
       toast({

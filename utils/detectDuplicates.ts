@@ -1,3 +1,5 @@
+// jira-backlog-cleaner/utils/detectDuplicates.ts
+
 import pinecone from '../lib/pineconeClient';
 import { JiraIssue, DuplicateGroup } from '../types/types';
 import { PINECONE_INDEX_NAME } from '../config';
@@ -71,6 +73,7 @@ export async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise
           explanation: `Issues '${issue.key}' and '${matchedIssue.key}' are duplicates based on a similarity score of ${bestMatch.score!.toFixed(
             2
           )}.`,
+          similarityScore: bestMatch.score!, // Add this line
         });
 
         processedIssues.add(issue.key);

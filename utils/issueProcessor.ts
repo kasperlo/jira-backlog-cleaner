@@ -5,6 +5,7 @@ import { createJiraClient } from '../lib/jiraClient';
 import openai from '../lib/openaiClient';
 import pinecone from '../lib/pineconeClient';
 import { OPENAI_EMBEDDING_MODEL, PINECONE_INDEX_NAME } from '@/config';
+
 export async function fetchAllIssues(config: JiraConfig): Promise<JiraIssue[]> {
   const jiraClient = createJiraClient(config);
   const jql = `project = "${config.projectKey}" ORDER BY created DESC`;
@@ -58,7 +59,7 @@ export async function upsertEmbeddingsToPinecone(vectors: PineconeVector[]) {
   const BATCH_SIZE = 100;
   for (let i = 0; i < vectors.length; i += BATCH_SIZE) {
     const batch = vectors.slice(i, i + BATCH_SIZE);
-    await index.upsert(batch);
+    await index.upsert(batch); // Pass the batch array directly
     console.log(`Upserted batch ${i / BATCH_SIZE + 1} to Pinecone`);
   }
 }
