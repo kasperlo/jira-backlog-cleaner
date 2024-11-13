@@ -15,10 +15,6 @@ interface EditIssueSummaryRequest {
   };
 }
 
-interface EditIssueSummaryResponse {
-  message: string;
-}
-
 export async function POST(request: Request) {
   try {
     const { issueKey, newSummary, config } = await request.json() as EditIssueSummaryRequest;

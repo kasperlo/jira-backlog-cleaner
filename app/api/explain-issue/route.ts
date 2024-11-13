@@ -13,10 +13,6 @@ interface ExplainIssueRequest {
   config: JiraConfig;
 }
 
-interface ExplainIssueResponse {
-  explanation: string;
-}
-
 export async function POST(request: Request) {
   try {
     const { issueKey, projectDescription, config } = await request.json() as ExplainIssueRequest;

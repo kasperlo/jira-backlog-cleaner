@@ -4,11 +4,6 @@ import { NextResponse } from 'next/server';
 import { JiraConfig } from '../../../types/types';
 import { validateJiraConfig } from '../../../utils/validateJiraConfig';
 
-interface ValidateJiraConfigResponse {
-  success: boolean;
-  message: string;
-}
-
 export async function POST(request: Request) {
   try {
     const { config } = await request.json() as { config: JiraConfig };
