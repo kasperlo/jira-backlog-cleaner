@@ -8,15 +8,18 @@ import {
     Button,
     Flex,
     VStack,
+    useToast,
 } from '@chakra-ui/react';
 import { DuplicateGroup, JiraIssue } from '../types/types';
 import { IssueCard } from './IssueCard';
 import { useState } from 'react';
 import { SimilarityBar } from './SimilarityBar';
 import axios from 'axios';
-import { IssueListSkeleton } from './IssueListSkeleton';
 import { useJira } from '@/context/JiraContext';
 import { IssueCardSkeleton } from './IssueCardSkeleton';
+import { IssueListSkeleton } from './IssueListSkeleton';
+import { SubtaskInput } from '../types/types';
+import { SubtaskInputRow } from './SubtaskInputRow'; // Ensure this import exists
 
 interface DuplicatesListProps {
     duplicates: DuplicateGroup[];
@@ -34,12 +37,17 @@ export function DuplicatesList({
     actionInProgress,
 }: DuplicatesListProps) {
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [loadingSuggestion, setLoadingSuggestion] = useState(false);
+    const [loadingActionSuggestion, setLoadingActionSuggestion] = useState(false);
     const [actionSuggestion, setActionSuggestion] = useState<string | null>(null);
+    const [loadingMergeSuggestion, setLoadingMergeSuggestion] = useState(false);
     const [mergeSuggestion, setMergeSuggestion] = useState<JiraIssue | null>(null);
+
+    const [subtasksForNewIssue, setSubtasksForNewIssue] = useState<string[]>([]);
 
     const totalPairs = duplicates.length;
     const currentGroup = duplicates[currentIndex];
+
+    const toast = useToast();
 
     const { config } = useJira();
 
@@ -47,16 +55,18 @@ export function DuplicatesList({
         setCurrentIndex((prev) => (prev > 0 ? prev - 1 : prev));
         setActionSuggestion(null);
         setMergeSuggestion(null);
+        setSubtasksForNewIssue([]);
     };
 
     const goToNext = () => {
         setCurrentIndex((prev) => (prev < totalPairs - 1 ? prev + 1 : prev));
         setActionSuggestion(null);
         setMergeSuggestion(null);
+        setSubtasksForNewIssue([]);
     };
 
     const handleGetSuggestion = async () => {
-        setLoadingSuggestion(true);
+        setLoadingActionSuggestion(true);
         setActionSuggestion(null);
         try {
             const response = await axios.post('/api/suggest-action', {
@@ -65,16 +75,30 @@ export function DuplicatesList({
             });
             const suggestion = response.data.suggestion;
             setActionSuggestion(suggestion.description);
-        } catch (error) {
+            toast({
+                title: 'Action Suggestion Received',
+                description: 'An action suggestion has been generated.',
+                status: 'info',
+                duration: 3000,
+                isClosable: true,
+            });
+        } catch (error: any) {
             console.error('Error fetching action suggestion:', error);
             setActionSuggestion('Failed to fetch suggestion.');
+            toast({
+                title: 'Error',
+                description: 'Failed to fetch action suggestion.',
+                status: 'error',
+                duration: 5000,
+                isClosable: true,
+            });
         } finally {
-            setLoadingSuggestion(false);
+            setLoadingActionSuggestion(false);
         }
     };
 
     const handleMergeSuggestion = async () => {
-        setLoadingSuggestion(true);
+        setLoadingMergeSuggestion(true);
         setMergeSuggestion(null);
         try {
             const response = await axios.post('/api/merge-suggestion', {
@@ -84,40 +108,101 @@ export function DuplicatesList({
             const suggestion = response.data.suggestion;
             console.log('Merge Suggestion Received:', suggestion);
             setMergeSuggestion(suggestion);
-        } catch (error) {
+            toast({
+                title: 'Merge Suggestion Received',
+                description: 'A merge suggestion has been generated.',
+                status: 'info',
+                duration: 3000,
+                isClosable: true,
+            });
+        } catch (error: any) {
             console.error('Error fetching merge suggestion:', error);
             setMergeSuggestion(null);
+            toast({
+                title: 'Error',
+                description: 'Failed to fetch merge suggestion.',
+                status: 'error',
+                duration: 5000,
+                isClosable: true,
+            });
         } finally {
-            setLoadingSuggestion(false);
+            setLoadingMergeSuggestion(false);
         }
     };
 
     const handleAcceptSuggestion = async () => {
         try {
-            // Make DELETE calls for original issues
-            await Promise.all(
+            // Make DELETE calls for original issues with the 'delete' action
+            const deleteResponses = await Promise.allSettled(
                 currentGroup.group.map(issue =>
-                    axios.post('/api/delete-issue', { issueKey: issue.key, config })
+                    axios.post('/api/delete-issue', {
+                        issueKey: issue.key,
+                        config,
+                        action: 'delete' // Specify the action here
+                    })
                 )
             );
 
-            // Make CREATE call for the new merged issue
-            await axios.post('/api/create-issue', {
-                suggestion: mergeSuggestion,
+            // Check for any failed deletions
+            const failedDeletions = deleteResponses.filter(response => response.status === 'rejected');
+
+            if (failedDeletions.length > 0) {
+                throw new Error('One or more issues could not be deleted. Please check your permissions and try again.');
+            }
+
+            // Prepare the suggestion payload with the correct structure
+            const suggestionPayload = {
+                summary: mergeSuggestion?.fields.summary,
+                description: mergeSuggestion?.fields.description || "",
+                issuetype: mergeSuggestion?.fields.issuetype.name, // Extract the name as a string
+            };
+
+            // Make CREATE call for the new merged issue with subtasks
+            const createResponse = await axios.post('/api/create-issue', {
+                suggestion: suggestionPayload, // Use the correctly structured suggestion
                 isEpic: false,
                 config,
+                subtasks: subtasksForNewIssue, // Include subtasks here
+            });
+
+            toast({
+                title: 'Merge Accepted',
+                description: 'Original issues deleted and new merged issue created successfully.',
+                status: 'success',
+                duration: 5000,
+                isClosable: true,
             });
 
             // Reset and move to the next duplicate pair
             setMergeSuggestion(null);
+            setSubtasksForNewIssue([]);
             goToNext();
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error accepting merge suggestion:', error);
+            toast({
+                title: 'Error',
+                description: error.response?.data?.error || error.message || 'Failed to accept merge suggestion.',
+                status: 'error',
+                duration: 5000,
+                isClosable: true,
+            });
         }
     };
 
     const handleIgnoreSuggestion = () => {
         setMergeSuggestion(null);
+        toast({
+            title: 'Suggestion Ignored',
+            description: 'The merge suggestion has been ignored.',
+            status: 'info',
+            duration: 3000,
+            isClosable: true,
+        });
+    };
+
+    // Callback to collect subtasks from IssueCard
+    const handleSubtasksChange = (subtasks: string[]) => {
+        setSubtasksForNewIssue(subtasks);
     };
 
     if (!currentGroup) {
@@ -153,6 +238,15 @@ export function DuplicatesList({
                 {currentGroup.group.map((issue) => (
                     <IssueCard key={issue.id} issue={issue} />
                 ))}
+
+                {/* New Merged Issue Card */}
+                {mergeSuggestion && (
+                    <IssueCard
+                        issue={mergeSuggestion}
+                        isNew={true}
+                        onSubtasksChange={handleSubtasksChange}
+                    />
+                )}
             </Flex>
 
             {/* Action Buttons */}
@@ -161,14 +255,14 @@ export function DuplicatesList({
                     <Button
                         colorScheme="blue"
                         onClick={handleGetSuggestion}
-                        isLoading={actionInProgress || loadingSuggestion}
+                        isLoading={actionInProgress || loadingActionSuggestion}
                     >
                         Get Action Suggestion
                     </Button>
                     <Button
                         colorScheme="teal"
                         onClick={handleMergeSuggestion}
-                        isLoading={actionInProgress || loadingSuggestion}
+                        isLoading={actionInProgress || loadingMergeSuggestion}
                     >
                         Merge Issues
                     </Button>
@@ -188,41 +282,55 @@ export function DuplicatesList({
                     </Button>
                 </ButtonGroup>
 
-                {/* Suggestion Display */}
-                <Box width="100%" mt={4}>
-                    {loadingSuggestion ? (
-                        <Flex direction="column" align="center" width="100%">
-                            <IssueCardSkeleton />
-                        </Flex>
-                    ) : mergeSuggestion ? (
-                        <Flex direction="column" align="center" width="100%">
-                            <IssueCard issue={mergeSuggestion} />
-                            <ButtonGroup mt={2}>
-                                <Button colorScheme="green" onClick={handleAcceptSuggestion}>
-                                    Accept New Issue
-                                </Button>
-                                <Button colorScheme="gray" onClick={handleIgnoreSuggestion}>
-                                    Ignore Suggestion
-                                </Button>
-                                <Button colorScheme="blue" onClick={handleMergeSuggestion}>
-                                    Try Again
-                                </Button>
-                            </ButtonGroup>
-                        </Flex>
-                    ) : actionSuggestion && (
-                        <Box
-                            borderWidth="1px"
-                            borderRadius="md"
-                            p={4}
-                            width="100%"
-                            bg="gray.50"
-                        >
-                            <Text fontWeight="bold">Suggested Action:</Text>
-                            <Text mt={2}>{actionSuggestion}</Text>
-                        </Box>
+                {/* Suggestions Display */}
+                <Flex
+                    direction={['column', 'row']}
+                    justifyContent="space-between"
+                    width="100%"
+                    mt={4}
+                    gap={4}
+                >
+                    {/* Action Suggestion */}
+                    <Box flex="1">
+                        <Heading size="sm" mb={2}>
+                            Action Suggestion
+                        </Heading>
+                        {loadingActionSuggestion ? (
+                            <IssueListSkeleton itemCount={1} />
+                        ) : actionSuggestion ? (
+                            <Box
+                                borderWidth="1px"
+                                borderRadius="md"
+                                p={4}
+                                bg="gray.50"
+                            >
+                                <Text fontWeight="bold">Suggested Action:</Text>
+                                <Text mt={2}>{actionSuggestion}</Text>
+                            </Box>
+                        ) : null}
+                    </Box>
+
+                    {/* Conditionally Render Accept and Ignore Buttons When Merge Suggestion is Present */}
+                    {mergeSuggestion && (
+                        <ButtonGroup>
+                            <Button
+                                colorScheme="green"
+                                onClick={handleAcceptSuggestion}
+                                isLoading={actionInProgress}
+                            >
+                                Accept Suggestion
+                            </Button>
+                            <Button
+                                colorScheme="red"
+                                onClick={handleIgnoreSuggestion}
+                                isLoading={actionInProgress}
+                            >
+                                Ignore Suggestion
+                            </Button>
+                        </ButtonGroup>
                     )}
-                </Box>
-            </VStack >
-        </Box >
+                </Flex>
+            </VStack>
+        </Box>
     );
 }

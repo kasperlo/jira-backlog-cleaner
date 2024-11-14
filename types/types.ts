@@ -144,3 +144,9 @@ export interface SubtaskAction {
   subtaskKey: string;
   action: 'delete' | 'convert';
 }
+
+export interface SubtaskInput {
+  id: number;
+  title: string;
+  isConfirmed: boolean;
+}

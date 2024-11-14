@@ -10,8 +10,9 @@ import pinecone from '@/lib/pineconeClient';
 
 export async function POST(request: Request) {
   try {
-    const { suggestion, isEpic, config } = await request.json();
+    const { suggestion, isEpic, config, subtasks } = await request.json();
 
+    // Validate Jira configuration
     if (
       !config ||
       !config.jiraEmail ||
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid Jira configuration provided.' }, { status: 400 });
     }
 
+    // Validate suggestion
     if (!suggestion || !suggestion.summary || !suggestion.description || !suggestion.issuetype) {
       return NextResponse.json(
         { error: 'Suggestion must include summary, description, and issuetype.' },
@@ -38,7 +40,7 @@ export async function POST(request: Request) {
           key: config.projectKey,
         },
         summary: suggestion.summary,
-        description: suggestion.description,
+        description: suggestion.description || "",
         issuetype: {
           name: isEpic ? 'Epic' : suggestion.issuetype,
         },
@@ -49,7 +51,7 @@ export async function POST(request: Request) {
       issueData.fields.customfield_10011 = suggestion.summary; // Adjust the custom field ID as per your Jira instance
     }
 
-    // Create the issue in Jira
+    // Create the main issue in Jira
     const issue = await jira.addNewIssue(issueData);
 
     // Fetch the newly created issue details
@@ -86,8 +88,37 @@ export async function POST(request: Request) {
       },
     ]);
 
+    // Handle Subtasks Creation
+    if (subtasks && Array.isArray(subtasks) && subtasks.length > 0) {
+      for (const subtaskTitle of subtasks) {
+        const subtaskData = {
+          fields: {
+            project: {
+              key: config.projectKey,
+            },
+            summary: subtaskTitle,
+            description: '', // Optional: Add description if needed
+            issuetype: {
+              name: 'Sub-task', // Ensure this matches your Jira instance's subtask type
+            },
+            parent: {
+              key: issue.key,
+            },
+          },
+        };
+
+        // Create each subtask under the new issue
+        try {
+          await jira.addNewIssue(subtaskData);
+        } catch (subtaskError: any) {
+          console.error(`Error creating subtask '${subtaskTitle}':`, subtaskError);
+          // Optionally, handle errors (e.g., rollback main issue creation)
+        }
+      }
+    }
+
     return NextResponse.json(
-      { message: 'Issue created successfully.', issue: createdIssue },
+      { message: 'Issue and subtasks created successfully.', issue: createdIssue },
       { status: 200 }
     );
   } catch (error: unknown) {
