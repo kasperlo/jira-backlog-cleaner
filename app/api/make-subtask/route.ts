@@ -7,6 +7,7 @@ export async function POST(request: Request) {
   try {
     const { parentIssueKey, subtaskIssueKey, config } = await request.json();
 
+    // Validate Jira configuration
     if (!config || !config.jiraEmail || !config.jiraApiToken || !config.jiraBaseUrl || !config.projectKey) {
       console.warn('Invalid Jira configuration provided:', config);
       return NextResponse.json({ error: 'Invalid Jira configuration provided.' }, { status: 400 });
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
 
     // Check if parent issue type supports subtasks
     const parentIssueType = parentIssue.fields.issuetype.name;
-    const issueTypesThatSupportSubtasks = ['Task', 'Story', 'Bug', 'Epic'];
+    const issueTypesThatSupportSubtasks = ['Task', 'Story', 'Bug', 'Epic']; // Adjust based on your Jira configuration
 
     if (!issueTypesThatSupportSubtasks.includes(parentIssueType)) {
       return NextResponse.json(
@@ -44,45 +45,48 @@ export async function POST(request: Request) {
       );
     }
 
-    // Fetch create metadata to get the issue type ID for 'Sub-task'
+    // Fetch create metadata to get the issue type ID for subtask (dynamic)
     const projectKey = parentIssue.fields.project.key;
     const createMeta = await jira.getIssueCreateMetadata({
       projectKeys: [projectKey],
       expand: 'projects.issuetypes.fields',
     });
 
-    // Find the issue type ID for 'Sub-task'
-    let subtaskIssueTypeId: string | undefined;
+    // Find all subtask issue types (regardless of their name)
+    let subtaskIssueTypeIds: string[] = [];
     const projectMeta = createMeta.projects.find(
       (proj: any) => proj.key === projectKey
     );
 
     if (projectMeta) {
-      const subtaskIssueType = projectMeta.issuetypes.find(
+      const subtaskIssueTypes = projectMeta.issuetypes.filter(
         (it: any) => it.subtask === true
       );
-      if (subtaskIssueType) {
-        subtaskIssueTypeId = subtaskIssueType.id;
-      }
+      subtaskIssueTypeIds = subtaskIssueTypes.map((it: any) => it.id);
     }
 
-    if (!subtaskIssueTypeId) {
+    if (subtaskIssueTypeIds.length === 0) {
       return NextResponse.json(
-        { error: "Sub-task issue type not found in the project. Ensure that the 'Sub-task' issue type is available in the project's issue type scheme." },
+        { error: "No subtask issue type found in the project. Ensure that the project has at least one subtask issue type." },
         { status: 400 }
       );
     }
 
+    // Choose the first subtask issue type ID
+    const subtaskIssueTypeId = subtaskIssueTypeIds[0];
+
     // Prepare fields for the new subtask
-    const newSubtaskData = {
+    const newSubtaskData: any = {
       fields: {
-        project: { key: projectKey },
         parent: { key: parentIssueKey },
         summary: originalIssue.fields.summary,
         description: originalIssue.fields.description,
         issuetype: { id: subtaskIssueTypeId },
       },
     };
+
+    // Optional: Include 'project' field if necessary
+    newSubtaskData.fields.project = { key: projectKey };
 
     // Create the new subtask
     const newSubtask = await jira.addNewIssue(newSubtaskData);
@@ -108,9 +112,23 @@ export async function POST(request: Request) {
       newSubtaskKey: newSubtask.key,
     }, { status: 200 });
 
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error while creating subtask.';
-    console.error('Error creating subtask:', errorMessage);
+  } catch (error: any) {
+    console.error('Error creating subtask:', error);
+
+    // Extract detailed error messages from Jira response
+    let errorMessage = 'Internal server error while creating subtask.';
+    if (error.response && error.response.data) {
+      if (error.response.data.errors && error.response.data.errors.pid) {
+        errorMessage = error.response.data.errors.pid;
+      } else if (error.response.data.errorMessages && error.response.data.errorMessages.length > 0) {
+        errorMessage = error.response.data.errorMessages.join(', ');
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

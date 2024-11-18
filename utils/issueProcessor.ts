@@ -8,7 +8,9 @@ import { OPENAI_EMBEDDING_MODEL, PINECONE_INDEX_NAME } from '@/config';
 
 export async function fetchAllIssues(config: JiraConfig): Promise<JiraIssue[]> {
   const jiraClient = createJiraClient(config);
-  const jql = `project = "${config.projectKey}" ORDER BY created DESC`;
+
+  // Modify JQL to exclude all subtask issue types
+  const jql = `project = "${config.projectKey}" AND issuetype NOT IN subTaskIssueTypes() ORDER BY created DESC`;
   const maxResults = 100;
   let startAt = 0;
   let total = 0;
@@ -29,6 +31,8 @@ export async function fetchAllIssues(config: JiraConfig): Promise<JiraIssue[]> {
   return allIssues;
 }
 
+
+
 export async function generateEmbeddings(issues: JiraIssue[]): Promise<PineconeVector[]> {
   const embeddings = await Promise.all(
     issues.map(async (issue) => {
@@ -45,7 +49,7 @@ export async function generateEmbeddings(issues: JiraIssue[]): Promise<PineconeV
           issueKey: issue.key,
           summary: issue.fields.summary,
           description: issue.fields.description || '',
-          issuetype: issue.fields.issuetype.name,
+          issueType: issue.fields.issuetype.name,
           parentKey: issue.fields.parent?.key || '',
         },
       } as PineconeVector;

@@ -9,6 +9,7 @@ import {
     Flex,
     VStack,
     useToast,
+    HStack,
 } from '@chakra-ui/react';
 import { DuplicateGroup, JiraIssue } from '../types/types';
 import { IssueCard } from './IssueCard';
@@ -17,12 +18,13 @@ import { SimilarityBar } from './SimilarityBar';
 import axios from 'axios';
 import { useJira } from '@/context/JiraContext';
 import { IssueCardSkeleton } from './IssueCardSkeleton';
-import { IssueListSkeleton } from './IssueListSkeleton';
 import { SubtaskInput } from '../types/types';
-import { SubtaskInputRow } from './SubtaskInputRow'; // Ensure this import exists
+import { SubtaskInputRow } from './SubtaskInputRow';
+import { IssueListSkeleton } from './IssueListSkeleton';
 
 interface DuplicatesListProps {
     duplicates: DuplicateGroup[];
+    setDuplicates: React.Dispatch<React.SetStateAction<DuplicateGroup[]>>; // New prop to update duplicates list
     onMerge: (group: DuplicateGroup) => void;
     onNotDuplicate: (group: DuplicateGroup) => void;
     onIgnore: (group: DuplicateGroup) => void;
@@ -31,6 +33,7 @@ interface DuplicatesListProps {
 
 export function DuplicatesList({
     duplicates,
+    setDuplicates,
     onMerge,
     onNotDuplicate,
     onIgnore,
@@ -50,6 +53,7 @@ export function DuplicatesList({
     const toast = useToast();
 
     const { config } = useJira();
+    const [localActionInProgress, setLocalActionInProgress] = useState<boolean>(false);
 
     const goToPrevious = () => {
         setCurrentIndex((prev) => (prev > 0 ? prev - 1 : prev));
@@ -106,7 +110,6 @@ export function DuplicatesList({
                 config,
             });
             const suggestion = response.data.suggestion;
-            console.log('Merge Suggestion Received:', suggestion);
             setMergeSuggestion(suggestion);
             toast({
                 title: 'Merge Suggestion Received',
@@ -187,6 +190,7 @@ export function DuplicatesList({
                 isClosable: true,
             });
         }
+
     };
 
     const handleIgnoreSuggestion = () => {
@@ -198,11 +202,121 @@ export function DuplicatesList({
             duration: 3000,
             isClosable: true,
         });
+        goToNext();
     };
 
     // Callback to collect subtasks from IssueCard
     const handleSubtasksChange = (subtasks: string[]) => {
         setSubtasksForNewIssue(subtasks);
+    };
+
+    const handleDeleteIssue = async (issueKey: string) => {
+        try {
+            if (!config) {
+                toast({
+                    title: 'Jira configuration missing.',
+                    description: 'Please configure your Jira settings first.',
+                    status: 'error',
+                    duration: 5000,
+                    isClosable: true,
+                });
+                return;
+            }
+
+            const confirmDelete = window.confirm(
+                `Are you sure you want to delete issue ${issueKey} and all its subtasks?`
+            );
+            if (!confirmDelete) return;
+
+            setLocalActionInProgress(true);
+            const response = await axios.post('/api/delete-issue', {
+                issueKey,
+                config,
+                action: 'delete',
+            });
+
+            console.log('Delete issue response:', response);
+
+            if (response.status === 200) {
+                // Remove the duplicate pair from duplicates list
+                setDuplicates((prev) => prev.filter((group) => group !== currentGroup));
+                toast({
+                    title: `Issue ${issueKey} and its subtasks deleted successfully.`,
+                    status: 'success',
+                    duration: 3000,
+                    isClosable: true,
+                });
+                // Move to next duplicate pair
+                goToNext();
+            } else {
+                console.error('Unexpected response status:', response.status);
+                throw new Error(response.data.error || 'Failed to delete issue.');
+            }
+        } catch (error: any) {
+            console.error('Error deleting issue:', error);
+            toast({
+                title: 'Failed to delete issue.',
+                description: error.response?.data?.error || 'Please try again later.',
+                status: 'error',
+                duration: 3000,
+                isClosable: true,
+            });
+        } finally {
+            setLocalActionInProgress(false);
+        }
+    };
+
+    const handleMakeSubtask = async (subtaskIssueKey: string, parentIssueKey: string) => {
+        try {
+            if (!config) {
+                toast({
+                    title: 'Jira configuration missing.',
+                    description: 'Please configure your Jira settings first.',
+                    status: 'error',
+                    duration: 5000,
+                    isClosable: true,
+                });
+                return;
+            }
+
+            const confirmAction = window.confirm(
+                `Are you sure you want to make issue ${subtaskIssueKey} a subtask of ${parentIssueKey}? This will delete the original issue.`
+            );
+            if (!confirmAction) return;
+
+            setLocalActionInProgress(true);
+
+            // Call the API to make subtask and delete the original issue
+            await axios.post('/api/make-subtask', {
+                subtaskIssueKey,
+                parentIssueKey,
+                config,
+            });
+
+            // Remove the duplicate pair from duplicates list
+            setDuplicates((prev) => prev.filter((group) => group !== currentGroup));
+
+            toast({
+                title: `Issue ${subtaskIssueKey} has been converted into a subtask of ${parentIssueKey} and the original issue was deleted.`,
+                status: 'success',
+                duration: 3000,
+                isClosable: true,
+            });
+
+            // Move to next duplicate pair
+            goToNext();
+        } catch (error: any) {
+            console.error('Error converting to subtask:', error);
+            toast({
+                title: 'Failed to convert issue to subtask.',
+                description: error.response?.data?.error || 'Please try again later.',
+                status: 'error',
+                duration: 3000,
+                isClosable: true,
+            });
+        } finally {
+            setLocalActionInProgress(false);
+        }
     };
 
     if (!currentGroup) {
@@ -235,18 +349,32 @@ export function DuplicatesList({
 
             {/* Issue Cards */}
             <Flex justifyContent="center" alignItems="flex-start" wrap="wrap" mt={4}>
-                {currentGroup.group.map((issue) => (
-                    <IssueCard key={issue.id} issue={issue} />
-                ))}
+                {currentGroup.group.map((issue, index) => {
+                    const otherIssues = currentGroup.group.filter((_, i) => i !== index);
+                    const duplicateIssueKey = otherIssues[0]?.key || '';
+                    return (
+                        <IssueCard
+                            key={issue.id}
+                            issue={issue}
+                            onDelete={handleDeleteIssue}
+                            onMakeSubtask={handleMakeSubtask}
+                            duplicateIssueKey={duplicateIssueKey}
+                        />
+                    );
+                })}
 
-                {/* New Merged Issue Card */}
-                {mergeSuggestion && (
+                {/* Conditionally render IssueCardSkeleton or Merged Issue Card with Accept/Ignore Buttons */}
+                {loadingMergeSuggestion ? (
+                    <IssueCardSkeleton />
+                ) : mergeSuggestion ? (
                     <IssueCard
                         issue={mergeSuggestion}
                         isNew={true}
                         onSubtasksChange={handleSubtasksChange}
+                        onAcceptSuggestion={handleAcceptSuggestion}
+                        onIgnoreSuggestion={handleIgnoreSuggestion}
                     />
-                )}
+                ) : null}
             </Flex>
 
             {/* Action Buttons */}
@@ -309,26 +437,6 @@ export function DuplicatesList({
                             </Box>
                         ) : null}
                     </Box>
-
-                    {/* Conditionally Render Accept and Ignore Buttons When Merge Suggestion is Present */}
-                    {mergeSuggestion && (
-                        <ButtonGroup>
-                            <Button
-                                colorScheme="green"
-                                onClick={handleAcceptSuggestion}
-                                isLoading={actionInProgress}
-                            >
-                                Accept Suggestion
-                            </Button>
-                            <Button
-                                colorScheme="red"
-                                onClick={handleIgnoreSuggestion}
-                                isLoading={actionInProgress}
-                            >
-                                Ignore Suggestion
-                            </Button>
-                        </ButtonGroup>
-                    )}
                 </Flex>
             </VStack>
         </Box>

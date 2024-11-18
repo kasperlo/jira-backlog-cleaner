@@ -73,13 +73,19 @@ export interface ProgressData {
 export interface PineconeVector {
   id: string;
   values: number[];
-  metadata?: Record<string, any>;
+  metadata?: {
+    issueKey: string;
+    summary: string;
+    description?: string;
+    issueType: string; // Ensure this matches the key used in metadata
+    parentKey?: string;
+  };
 }
 
 export interface SuggestedIssue {
   summary: string;
   description: string;
-  issuetype: 'Story' | 'Task' | 'Subtask';
+  issueType: 'Story' | 'Task' | 'Subtask';
   explanation: string;
 }
 
@@ -87,7 +93,7 @@ export interface RecordMetadata {
   issueKey?: string;
   summary?: string;
   description?: string;
-  issuetype?: string;
+  issueType?: string;
   parentKey?: string;
   created?: string;
   subtasks?: Array<{

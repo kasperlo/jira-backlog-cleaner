@@ -29,7 +29,7 @@ export async function generateEmbeddings(issues: JiraIssue[]): Promise<PineconeV
           issueKey: issue.key,
           summary: issue.fields.summary,
           description: issue.fields.description || '',
-          issuetype: issue.fields.issuetype.name,
+          issueType: issue.fields.issuetype.name,
           parentKey: issue.fields.parent?.key || '',
         },
       });

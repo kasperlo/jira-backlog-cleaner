@@ -34,6 +34,19 @@ export async function POST(request: Request) {
 
     const jira = createJiraClient(config as JiraConfig);
 
+    // Get all issue types to determine the correct Sub-task name
+    const issueTypes = await jira.listIssueTypes();
+    const subtaskIssueType = issueTypes.find(
+      (type: { name: string }) => type.name === 'Sub-task' || type.name === 'Deloppgave'
+    );
+
+    if (!subtaskIssueType) {
+      return NextResponse.json(
+        { error: "Couldn't find the Sub-task issue type. Please check your Jira settings." },
+        { status: 400 }
+      );
+    }
+
     const issueData: any = {
       fields: {
         project: {
@@ -99,7 +112,7 @@ export async function POST(request: Request) {
             summary: subtaskTitle,
             description: '', // Optional: Add description if needed
             issuetype: {
-              name: 'Sub-task', // Ensure this matches your Jira instance's subtask type
+              name: subtaskIssueType.name, // Use the dynamically determined subtask issue type name
             },
             parent: {
               key: issue.key,
@@ -112,7 +125,7 @@ export async function POST(request: Request) {
           await jira.addNewIssue(subtaskData);
         } catch (subtaskError: any) {
           console.error(`Error creating subtask '${subtaskTitle}':`, subtaskError);
-          // Optionally, handle errors (e.g., rollback main issue creation)
+          throw new Error(`Error creating subtask '${subtaskTitle}': ${subtaskError.response?.data?.errorMessages || subtaskError.message}`);
         }
       }
     }

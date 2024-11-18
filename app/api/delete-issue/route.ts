@@ -47,7 +47,7 @@ export async function POST(request: Request) {
             await jira.updateIssue(subtaskKey, {
               fields: {
                 parent: null, // Remove parent to convert to task
-                issuetype: { name: 'Task' }, // Or set appropriate issuetype
+                issueType: { name: 'Task' }, // Or set appropriate issuetype
               },
             });
           } else {
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
             await jira.updateIssue(subtask.key, {
               fields: {
                 parent: null,
-                issuetype: { name: 'Task' },
+                issueType: { name: 'Task' },
               },
             });
           }

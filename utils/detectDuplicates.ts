@@ -26,11 +26,17 @@ export async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise
   const index = pinecone.Index(PINECONE_INDEX_NAME);
   const duplicateGroups: DuplicateGroup[] = [];
   const processedIssues = new Set<string>();
-  const SIMILARITY_THRESHOLD = parseFloat(process.env.SIMILARITY_THRESHOLD || '0.75');
+  const SIMILARITY_THRESHOLD = parseFloat(process.env.SIMILARITY_THRESHOLD || '0.5');
+
+  console.log(SIMILARITY_THRESHOLD)
+
+  // Define allowed issue types
+  const allowedIssueTypes = ['Story', 'Task', 'Epic'];
 
   for (const issue of issues) {
     if (processedIssues.has(issue.key)) continue;
 
+    // Fetch the vector for the current issue
     const fetchResponse = (await index.fetch([issue.key])) as FetchResponse;
     const vector = fetchResponse.records[issue.key];
 
@@ -41,11 +47,15 @@ export async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise
 
     const embedding = vector.values;
 
+    // Query Pinecone for similar issues with a metadata filter
     const queryResponse = await index.query({
       vector: embedding,
-      topK: 2,
+      topK: 10,
       includeMetadata: true,
       includeValues: false,
+      filter: {
+        issueType: { '$in': allowedIssueTypes }, // Ensure the key matches the updated metadata
+      },
     });
 
     const similarIssues = queryResponse.matches

@@ -129,7 +129,6 @@ export default function HomePage() {
             ) : (
               <IssuesList
                 issues={issues}
-                onDelete={handleDeleteIssueResponse}
                 onExplain={onExplain}
                 onSuggestSummary={onSuggestSummary}
                 onEditSummary={onEditSummary}
@@ -143,6 +142,7 @@ export default function HomePage() {
               {duplicates.length > 0 ? (
                 <DuplicatesList
                   duplicates={duplicates}
+                  setDuplicates={setDuplicates} // Add this line
                   onMerge={(group: DuplicateGroup) => openConfirmationModal(group, 'merge')}
                   onNotDuplicate={(group: DuplicateGroup) => openConfirmationModal(group, 'notDuplicate')}
                   onIgnore={(group: DuplicateGroup) => openConfirmationModal(group, 'ignore')}
@@ -151,6 +151,7 @@ export default function HomePage() {
                   onEditSummary={onEditSummary}
                   actionInProgress={actionInProgress}
                 />
+
               ) : (
                 <Text>No duplicate issues detected.</Text>
               )}

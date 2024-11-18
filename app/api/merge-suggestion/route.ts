@@ -27,6 +27,7 @@ export async function POST(request: Request) {
     
     ### Instructions:
     - Please respond only in JSON format, with no explanations or extra text.
+    - 
     - Use this exact format:
     
     {
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
         "summary": "Suggested merged issue summary in the same style as provided issues",
         "description": "Detailed description covering both issues, matching the style and structure.",
         "issuetype": {
-          "name": "Task" // or other appropriate type
+          "name": "Story", "Epic" or "Task", based on the scope of the issue, and the issuetype of the duplicate issues. If the duplicate issues are both of the same type, then that type shall be used for the suggested issue as well.
         }
       }
     }
