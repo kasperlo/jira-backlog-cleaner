@@ -9,7 +9,6 @@ import {
     Flex,
     VStack,
     useToast,
-    HStack,
 } from '@chakra-ui/react';
 import { DuplicateGroup, JiraIssue } from '../types/types';
 import { IssueCard } from './IssueCard';
@@ -18,8 +17,6 @@ import { SimilarityBar } from './SimilarityBar';
 import axios from 'axios';
 import { useJira } from '@/context/JiraContext';
 import { IssueCardSkeleton } from './IssueCardSkeleton';
-import { SubtaskInput } from '../types/types';
-import { SubtaskInputRow } from './SubtaskInputRow';
 import { IssueListSkeleton } from './IssueListSkeleton';
 
 interface DuplicatesListProps {
@@ -34,7 +31,6 @@ interface DuplicatesListProps {
 export function DuplicatesList({
     duplicates,
     setDuplicates,
-    onMerge,
     onNotDuplicate,
     onIgnore,
     actionInProgress,
@@ -45,28 +41,23 @@ export function DuplicatesList({
     const [loadingMergeSuggestion, setLoadingMergeSuggestion] = useState(false);
     const [mergeSuggestion, setMergeSuggestion] = useState<JiraIssue | null>(null);
 
-    const [subtasksForNewIssue, setSubtasksForNewIssue] = useState<string[]>([]);
-
     const totalPairs = duplicates.length;
     const currentGroup = duplicates[currentIndex];
 
     const toast = useToast();
 
     const { config } = useJira();
-    const [localActionInProgress, setLocalActionInProgress] = useState<boolean>(false);
 
     const goToPrevious = () => {
         setCurrentIndex((prev) => (prev > 0 ? prev - 1 : prev));
         setActionSuggestion(null);
         setMergeSuggestion(null);
-        setSubtasksForNewIssue([]);
     };
 
     const goToNext = () => {
         setCurrentIndex((prev) => (prev < totalPairs - 1 ? prev + 1 : prev));
         setActionSuggestion(null);
         setMergeSuggestion(null);
-        setSubtasksForNewIssue([]);
     };
 
     const handleGetSuggestion = async () => {
@@ -86,8 +77,9 @@ export function DuplicatesList({
                 duration: 3000,
                 isClosable: true,
             });
-        } catch (error: any) {
-            console.error('Error fetching action suggestion:', error);
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            console.error('Error fetching action suggestion:', errorMessage);
             setActionSuggestion('Failed to fetch suggestion.');
             toast({
                 title: 'Error',
@@ -118,8 +110,9 @@ export function DuplicatesList({
                 duration: 3000,
                 isClosable: true,
             });
-        } catch (error: any) {
-            console.error('Error fetching merge suggestion:', error);
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            console.error('Error fetching merge suggestion:', errorMessage);
             setMergeSuggestion(null);
             toast({
                 title: 'Error',
@@ -153,21 +146,6 @@ export function DuplicatesList({
                 throw new Error('One or more issues could not be deleted. Please check your permissions and try again.');
             }
 
-            // Prepare the suggestion payload with the correct structure
-            const suggestionPayload = {
-                summary: mergeSuggestion?.fields.summary,
-                description: mergeSuggestion?.fields.description || "",
-                issuetype: mergeSuggestion?.fields.issuetype.name, // Extract the name as a string
-            };
-
-            // Make CREATE call for the new merged issue with subtasks
-            const createResponse = await axios.post('/api/create-issue', {
-                suggestion: suggestionPayload, // Use the correctly structured suggestion
-                isEpic: false,
-                config,
-                subtasks: subtasksForNewIssue, // Include subtasks here
-            });
-
             toast({
                 title: 'Merge Accepted',
                 description: 'Original issues deleted and new merged issue created successfully.',
@@ -178,13 +156,13 @@ export function DuplicatesList({
 
             // Reset and move to the next duplicate pair
             setMergeSuggestion(null);
-            setSubtasksForNewIssue([]);
             goToNext();
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.error('Error accepting merge suggestion:', error);
             toast({
                 title: 'Error',
-                description: error.response?.data?.error || error.message || 'Failed to accept merge suggestion.',
+                description: errorMessage,
                 status: 'error',
                 duration: 5000,
                 isClosable: true,
@@ -205,11 +183,6 @@ export function DuplicatesList({
         goToNext();
     };
 
-    // Callback to collect subtasks from IssueCard
-    const handleSubtasksChange = (subtasks: string[]) => {
-        setSubtasksForNewIssue(subtasks);
-    };
-
     const handleDeleteIssue = async (issueKey: string) => {
         try {
             if (!config) {
@@ -228,7 +201,6 @@ export function DuplicatesList({
             );
             if (!confirmDelete) return;
 
-            setLocalActionInProgress(true);
             const response = await axios.post('/api/delete-issue', {
                 issueKey,
                 config,
@@ -252,17 +224,16 @@ export function DuplicatesList({
                 console.error('Unexpected response status:', response.status);
                 throw new Error(response.data.error || 'Failed to delete issue.');
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.error('Error deleting issue:', error);
             toast({
                 title: 'Failed to delete issue.',
-                description: error.response?.data?.error || 'Please try again later.',
+                description: errorMessage,
                 status: 'error',
                 duration: 3000,
                 isClosable: true,
             });
-        } finally {
-            setLocalActionInProgress(false);
         }
     };
 
@@ -284,8 +255,6 @@ export function DuplicatesList({
             );
             if (!confirmAction) return;
 
-            setLocalActionInProgress(true);
-
             // Call the API to make subtask and delete the original issue
             await axios.post('/api/make-subtask', {
                 subtaskIssueKey,
@@ -305,17 +274,16 @@ export function DuplicatesList({
 
             // Move to next duplicate pair
             goToNext();
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.error('Error converting to subtask:', error);
             toast({
                 title: 'Failed to convert issue to subtask.',
-                description: error.response?.data?.error || 'Please try again later.',
+                description: errorMessage,
                 status: 'error',
                 duration: 3000,
                 isClosable: true,
             });
-        } finally {
-            setLocalActionInProgress(false);
         }
     };
 
@@ -370,7 +338,6 @@ export function DuplicatesList({
                     <IssueCard
                         issue={mergeSuggestion}
                         isNew={true}
-                        onSubtasksChange={handleSubtasksChange}
                         onAcceptSuggestion={handleAcceptSuggestion}
                         onIgnoreSuggestion={handleIgnoreSuggestion}
                     />

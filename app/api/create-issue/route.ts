@@ -1,7 +1,7 @@
 // app/api/create-issue/route.ts
 
 import { NextResponse } from 'next/server';
-import { JiraConfig } from '@/types/types';
+import { IssueData, JiraConfig } from '@/types/types';
 import { createJiraClient } from '@/lib/jiraClient';
 import openai from '@/lib/openaiClient';
 import { retryWithExponentialBackoff } from '@/utils/retry';
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const issueData: any = {
+    const issueData: IssueData = {
       fields: {
         project: {
           key: config.projectKey,
@@ -123,9 +123,10 @@ export async function POST(request: Request) {
         // Create each subtask under the new issue
         try {
           await jira.addNewIssue(subtaskData);
-        } catch (subtaskError: any) {
-          console.error(`Error creating subtask '${subtaskTitle}':`, subtaskError);
-          throw new Error(`Error creating subtask '${subtaskTitle}': ${subtaskError.response?.data?.errorMessages || subtaskError.message}`);
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.error('Error creating issue:', errorMessage);
+          return NextResponse.json({ error: errorMessage }, { status: 500 });
         }
       }
     }

@@ -45,19 +45,13 @@ export default function HomePage() {
     selectedGroup,
     actionType,
     suggestion,
-    subtasks,
     isConfirmationOpen,
     onConfirmationClose,
-    isSubtaskModalOpen,
-    onSubtaskModalClose,
     openConfirmationModal,
     handleAction,
-    handleSubtaskAction,
-    handleDeleteIssueResponse,
     onExplain,
     onSuggestSummary,
     onEditSummary,
-    setSubtasks,
   } = useActionHandlers(fetchIssuesData, issues, setIssues, setDuplicates);
 
   useEffect(() => {
@@ -140,7 +134,7 @@ export default function HomePage() {
             ) : (
               <IssuesList
                 issues={issues}
-                onDelete={(issueKey) => Promise.resolve()}
+                onDelete={() => Promise.resolve()}
                 onExplain={onExplain}
                 onSuggestSummary={onSuggestSummary}
                 onEditSummary={onEditSummary}

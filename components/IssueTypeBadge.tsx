@@ -1,7 +1,7 @@
 // components/IssueTypeBadge.tsx
 
 import React from 'react';
-import { Badge, HStack, Text, Icon } from '@chakra-ui/react';
+import { Badge, Text, Icon } from '@chakra-ui/react';
 import { IconType } from 'react-icons';
 
 interface IssueTypeBadgeProps {

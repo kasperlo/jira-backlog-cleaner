@@ -4,7 +4,7 @@ import { JiraIssue } from '@/types/types';
 
 export async function POST(request: Request) {
   try {
-    const { issues, config } = await request.json();
+    const { issues } = await request.json();
 
     if (!issues || issues.length < 2) {
       return NextResponse.json({ error: 'Two issues are required to merge.' }, { status: 400 });

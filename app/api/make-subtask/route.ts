@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import JiraClient from 'jira-client';
+import { ErrorResponse, IssueType, ProjectMeta } from '@/types/types';
 
 export async function POST(request: Request) {
   try {
@@ -55,14 +56,14 @@ export async function POST(request: Request) {
     // Find all subtask issue types (regardless of their name)
     let subtaskIssueTypeIds: string[] = [];
     const projectMeta = createMeta.projects.find(
-      (proj: any) => proj.key === projectKey
+      (proj: ProjectMeta) => proj.key === projectKey
     );
 
     if (projectMeta) {
       const subtaskIssueTypes = projectMeta.issuetypes.filter(
-        (it: any) => it.subtask === true
+        (it: IssueType) => it.name.toLowerCase() === "subtask" || "sub-task" || "deloppgave"
       );
-      subtaskIssueTypeIds = subtaskIssueTypes.map((it: any) => it.id);
+      subtaskIssueTypeIds = subtaskIssueTypes.map((it: IssueType) => it.id);
     }
 
     if (subtaskIssueTypeIds.length === 0) {
@@ -76,12 +77,21 @@ export async function POST(request: Request) {
     const subtaskIssueTypeId = subtaskIssueTypeIds[0];
 
     // Prepare fields for the new subtask
-    const newSubtaskData: any = {
+    const newSubtaskData: {
+      fields: {
+        parent: { key: string };
+        summary: string;
+        description: string;
+        issuetype: { id: string };
+        project?: { key: string };
+      };
+    } = {
       fields: {
         parent: { key: parentIssueKey },
         summary: originalIssue.fields.summary,
         description: originalIssue.fields.description,
         issuetype: { id: subtaskIssueTypeId },
+        project: { key: projectKey },
       },
     };
 
@@ -112,23 +122,22 @@ export async function POST(request: Request) {
       newSubtaskKey: newSubtask.key,
     }, { status: 200 });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating subtask:', error);
-
-    // Extract detailed error messages from Jira response
+  
     let errorMessage = 'Internal server error while creating subtask.';
-    if (error.response && error.response.data) {
-      if (error.response.data.errors && error.response.data.errors.pid) {
-        errorMessage = error.response.data.errors.pid;
-      } else if (error.response.data.errorMessages && error.response.data.errorMessages.length > 0) {
-        errorMessage = error.response.data.errorMessages.join(', ');
-      } else if (error.message) {
-        errorMessage = error.message;
+    if (error instanceof Error && typeof error === "object" && "response" in error) {
+      const responseData = (error.response as { data?: ErrorResponse }).data;
+  
+      if (responseData?.errors?.pid) {
+        errorMessage = responseData.errors.pid;
+      } else if (responseData?.errorMessages?.length) {
+        errorMessage = responseData.errorMessages.join(', ');
       }
-    } else if (error.message) {
+    } else if (error instanceof Error) {
       errorMessage = error.message;
     }
-
+  
     return NextResponse.json({ error: errorMessage }, { status: 500 });
-  }
+  }  
 }

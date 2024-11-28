@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import JiraClient from 'jira-client';
 import { validateJiraConfig } from '../../../utils/validateJiraConfig';
+import { IssueType, ProjectMeta } from '@/types/types';
 
 interface CreateSubtaskRequest {
   parentIssueKey: string;
@@ -50,10 +51,10 @@ export async function POST(request: Request) {
 
     // Find the issue type ID for 'Sub-task'
     let subtaskIssueTypeId: string | undefined;
-    const projectMeta = createMeta.projects.find((proj: any) => proj.key === projectKey);
+    const projectMeta = createMeta.projects.find((proj: ProjectMeta) => proj.key === projectKey);
 
     if (projectMeta) {
-      const subtaskIssueType = projectMeta.issuetypes.find((it: any) => it.subtask === true);
+      const subtaskIssueType = projectMeta.issuetypes.find((it: IssueType) => it.name.toLowerCase() === "subtask" || "sub-task" || "deloppgave");
       if (subtaskIssueType) {
         subtaskIssueTypeId = subtaskIssueType.id;
       }

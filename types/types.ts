@@ -77,6 +77,11 @@ export interface ProgressData {
   errorMessage?: string;
 }
 
+export interface ErrorResponse {
+  errors?: Record<string, string>; // Assuming `errors` is an object with string keys and values
+  errorMessages?: string[];
+}
+
 export interface PineconeVector {
   id: string;
   values: number[];

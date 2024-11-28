@@ -9,7 +9,6 @@ import {
     IconButton,
     Button,
     useToast,
-    Heading,
     ButtonGroup,
     Tooltip,
     Spinner,
@@ -28,7 +27,6 @@ import { TbSubtask } from 'react-icons/tb';
 import axios from 'axios';
 import { useJira } from '@/context/JiraContext';
 import { statusColorMap, statusIconMap } from '@/utils/statusMappings';
-import { priorityColorMap, priorityIconMap } from '@/utils/priorityMappings';
 import { StatusBadge } from './StatusBadge';
 
 interface IssueCardProps {
@@ -45,7 +43,6 @@ interface IssueCardProps {
 export const IssueCard: React.FC<IssueCardProps> = ({
     issue,
     isNew = false,
-    onSubtasksChange,
     onAcceptSuggestion,
     onIgnoreSuggestion,
     onDelete,
@@ -61,10 +58,6 @@ export const IssueCard: React.FC<IssueCardProps> = ({
     const status = issue.fields.status?.name || 'Unknown';
     const statusColors = statusColorMap[status] || { bg: 'gray', color: 'white' };
     const statusIcon = statusIconMap[status];
-
-    const priority = issue.fields.priority?.name || 'None';
-    const priorityColors = priorityColorMap[priority] || { bg: 'gray', color: 'white' };
-    const priorityIcon = priorityIconMap[priority];
 
     const { config } = useJira();
 
@@ -112,11 +105,12 @@ export const IssueCard: React.FC<IssueCardProps> = ({
             setSubtasksList([newSubtask, ...subtasksList]);
             setSubtaskInputValue('');
             setShowSubtaskInput(false);
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.error('Error adding subtask:', error);
             toast({
                 title: 'Failed to add subtask.',
-                description: error.response?.data?.error || 'Please try again later.',
+                description: errorMessage,
                 status: 'error',
                 duration: 5000,
                 isClosable: true,
@@ -184,95 +178,91 @@ export const IssueCard: React.FC<IssueCardProps> = ({
 
                     {/* Description Accordion */}
                     <AccordionItem>
-                        {({ isExpanded }) => (
-                            <>
-                                <AccordionButton>
-                                    <Box flex="1" textAlign="left">
-                                        Description
-                                    </Box>
-                                    <AccordionIcon />
-                                </AccordionButton>
-                                <AccordionPanel pb={4}>
-                                    {issue.fields?.description ? (
-                                        <Text>{issue.fields.description}</Text>
-                                    ) : (
-                                        <Text color="gray.500">No description available.</Text>
-                                    )}
-                                </AccordionPanel>
-                            </>
-                        )}
+                        <>
+                            <AccordionButton>
+                                <Box flex="1" textAlign="left">
+                                    Description
+                                </Box>
+                                <AccordionIcon />
+                            </AccordionButton>
+                            <AccordionPanel pb={4}>
+                                {issue.fields?.description ? (
+                                    <Text>{issue.fields.description}</Text>
+                                ) : (
+                                    <Text color="gray.500">No description available.</Text>
+                                )}
+                            </AccordionPanel>
+                        </>
                     </AccordionItem>
 
                     {/* Subtasks Accordion */}
                     <AccordionItem>
-                        {({ isExpanded }) => (
-                            <>
-                                <AccordionButton>
-                                    <Box flex="1" textAlign="left">
-                                        Subtasks
-                                    </Box>
-                                    <HStack spacing={2}>
-                                        <IconButton
-                                            icon={<AddIcon />}
-                                            aria-label="Add subtask"
+                        <>
+                            <AccordionButton>
+                                <Box flex="1" textAlign="left">
+                                    Subtasks
+                                </Box>
+                                <HStack spacing={2}>
+                                    <IconButton
+                                        icon={<AddIcon />}
+                                        aria-label="Add subtask"
+                                        size="sm"
+                                        colorScheme="blue"
+                                        onClick={handleShowSubtaskInput}
+                                        onFocus={(e) => e.stopPropagation()}
+                                        onClickCapture={(e) => e.stopPropagation()}
+                                    />
+                                    <AccordionIcon />
+                                </HStack>
+                            </AccordionButton>
+                            <AccordionPanel pb={4}>
+                                {showSubtaskInput && (
+                                    <HStack mt={2}>
+                                        <Input
+                                            placeholder="New subtask title"
+                                            value={subtaskInputValue}
+                                            onChange={(e) => setSubtaskInputValue(e.target.value)}
                                             size="sm"
-                                            colorScheme="blue"
-                                            onClick={handleShowSubtaskInput}
-                                            onFocus={(e) => e.stopPropagation()}
-                                            onClickCapture={(e) => e.stopPropagation()}
+                                            isDisabled={isAddingSubtask}
                                         />
-                                        <AccordionIcon />
+                                        <IconButton
+                                            icon={isAddingSubtask ? <Spinner size="sm" /> : <CheckIcon />}
+                                            aria-label="Confirm add subtask"
+                                            size="sm"
+                                            colorScheme="green"
+                                            onClick={handleAddSubtask}
+                                            isLoading={isAddingSubtask}
+                                            isDisabled={isAddingSubtask}
+                                        />
                                     </HStack>
-                                </AccordionButton>
-                                <AccordionPanel pb={4}>
-                                    {showSubtaskInput && (
-                                        <HStack mt={2}>
-                                            <Input
-                                                placeholder="New subtask title"
-                                                value={subtaskInputValue}
-                                                onChange={(e) => setSubtaskInputValue(e.target.value)}
-                                                size="sm"
-                                                isDisabled={isAddingSubtask}
-                                            />
-                                            <IconButton
-                                                icon={isAddingSubtask ? <Spinner size="sm" /> : <CheckIcon />}
-                                                aria-label="Confirm add subtask"
-                                                size="sm"
-                                                colorScheme="green"
-                                                onClick={handleAddSubtask}
-                                                isLoading={isAddingSubtask}
-                                                isDisabled={isAddingSubtask}
-                                            />
-                                        </HStack>
-                                    )}
-                                    <VStack align="start" spacing={1} mt={2}>
-                                        {subtasksList.length > 0 ? (
-                                            subtasksList.map((subtask) => (
-                                                <Box
-                                                    key={subtask.id}
-                                                    p={2}
-                                                    bg="gray.100"
-                                                    borderRadius="md"
-                                                    width="100%"
-                                                    boxShadow="sm"
-                                                >
-                                                    <HStack justifyContent="space-between">
-                                                        <HStack>
-                                                            <Text fontSize="sm" fontWeight="bold">
-                                                                {subtask.key}:
-                                                            </Text>
-                                                            <Text fontSize="sm">{subtask.fields?.summary || 'No summary'}</Text>
-                                                        </HStack>
+                                )}
+                                <VStack align="start" spacing={1} mt={2}>
+                                    {subtasksList.length > 0 ? (
+                                        subtasksList.map((subtask) => (
+                                            <Box
+                                                key={subtask.id}
+                                                p={2}
+                                                bg="gray.100"
+                                                borderRadius="md"
+                                                width="100%"
+                                                boxShadow="sm"
+                                            >
+                                                <HStack justifyContent="space-between">
+                                                    <HStack>
+                                                        <Text fontSize="sm" fontWeight="bold">
+                                                            {subtask.key}:
+                                                        </Text>
+                                                        <Text fontSize="sm">{subtask.fields?.summary || 'No summary'}</Text>
                                                     </HStack>
-                                                </Box>
-                                            ))
-                                        ) : (
-                                            <Text color="gray.500">No subtasks available.</Text>
-                                        )}
-                                    </VStack>
-                                </AccordionPanel>
-                            </>
-                        )}
+                                                </HStack>
+                                            </Box>
+                                        ))
+                                    ) : (
+                                        <Text color="gray.500">No subtasks available.</Text>
+                                    )}
+                                </VStack>
+                            </AccordionPanel>
+                        </>
                     </AccordionItem>
 
                 </Accordion>
