@@ -13,27 +13,35 @@ import {
     Alert,
     AlertIcon,
     Spinner,
+    Textarea,
 } from '@chakra-ui/react';
 import axios from 'axios';
 import { useJira } from '../context/JiraContext';
 import { JiraConfig } from '../types/types';
 
 const JiraConfigForm = () => {
-    const { setConfig, setProjectTitle } = useJira(); // Updated to include setProjectTitle
+    const { setConfig, setProjectTitle, setProjectDescription } = useJira(); // Updated to include setProjectDescription
     const [localConfig, setLocalConfig] = useState<JiraConfig>({
         jiraEmail: '',
         jiraApiToken: '',
         jiraBaseUrl: '',
         projectKey: '',
     });
+    const [localProjectDescription, setLocalProjectDescription] = useState<string>(''); // New state for project description
     const [error, setError] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setLocalConfig({
-            ...localConfig,
-            [e.target.name]: e.target.value.trim(),
-        });
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+
+        if (name === 'projectDescription') {
+            setLocalProjectDescription(value);
+        } else {
+            setLocalConfig({
+                ...localConfig,
+                [name]: value.trim(),
+            });
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -45,7 +53,8 @@ const JiraConfigForm = () => {
             !localConfig.jiraEmail ||
             !localConfig.jiraApiToken ||
             !localConfig.jiraBaseUrl ||
-            !localConfig.projectKey
+            !localConfig.projectKey ||
+            !localProjectDescription
         ) {
             setError('All fields are required.');
             return;
@@ -69,6 +78,7 @@ const JiraConfigForm = () => {
             if (response.data.success) {
                 setConfig(localConfig);
                 setProjectTitle(response.data.projectTitle); // Store the project title
+                setProjectDescription(localProjectDescription); // Store the project description
             } else {
                 setError(response.data.message);
             }
@@ -126,7 +136,18 @@ const JiraConfigForm = () => {
                             name="projectKey"
                             value={localConfig.projectKey}
                             onChange={handleChange}
-                            placeholder="Project Key (i.e. 'BG')"
+                            placeholder="Project Key (e.g., 'BG')"
+                        />
+                    </FormControl>
+
+                    <FormControl id="projectDescription" isRequired>
+                        <FormLabel>Project Description</FormLabel>
+                        <Textarea
+                            name="projectDescription"
+                            value={localProjectDescription}
+                            onChange={handleChange}
+                            placeholder="Enter your project description here..."
+                            rows={4}
                         />
                     </FormControl>
 

@@ -42,40 +42,6 @@ export function useActionHandlers(
   } = useDisclosure();
 
   /**
-   * Opens the confirmation modal and fetches action suggestions if merging.
-   * @param group - The group of duplicate issues selected.
-   * @param type - The type of action ('merge', 'notDuplicate', 'ignore').
-   */
-  const openConfirmationModal = async (group: DuplicateGroup, type: ActionType) => {
-    setSelectedGroup(group);
-    setActionType(type);
-
-    if (type === 'merge') {
-      try {
-        const response = await axios.post('/api/suggest-action', {
-          issues: group.group,
-          config,
-        });
-        const data = response.data.suggestion as ActionSuggestion;
-        setSuggestion(data);
-      } catch (error) {
-        console.error('Error getting action suggestion:', error);
-        setSuggestion(null);
-        toast({
-          title: 'An error occurred while getting the action suggestion.',
-          status: 'error',
-          duration: 3000,
-          isClosable: true,
-        });
-      }
-    } else {
-      setSuggestion(null);
-    }
-
-    onConfirmationOpen();
-  };
-
-  /**
    * Handles the user's action based on the selected option and action type.
    * @param selectedOption - The user's selected option ('recommendation' or 'markAsDuplicate').
    */
@@ -609,7 +575,6 @@ export function useActionHandlers(
     isSubtaskModalOpen,
     onSubtaskModalOpen,
     onSubtaskModalClose,
-    openConfirmationModal,
     handleAction,
     handleSubtaskAction,
     handleDeleteIssueResponse,

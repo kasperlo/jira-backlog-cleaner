@@ -1,7 +1,7 @@
-// jira-backlog-cleaner/app/api/delete-issue/route.ts
-
 import { NextResponse } from 'next/server';
 import JiraClient from 'jira-client';
+import pinecone from '@/lib/pineconeClient'; // Import Pinecone client
+import { PINECONE_INDEX_NAME } from '@/config';
 import { JiraIssue } from '@/types/types';
 
 export async function POST(request: Request) {
@@ -38,7 +38,6 @@ export async function POST(request: Request) {
 
     if (issue.fields.subtasks && issue.fields.subtasks.length > 0) {
       if (subtaskActions && Array.isArray(subtaskActions) && subtaskActions.length > 0) {
-        // Handle individual subtask actions
         for (const subtaskAction of subtaskActions) {
           const { subtaskKey, action: subtaskActionType } = subtaskAction;
           if (subtaskActionType === 'delete') {
@@ -46,8 +45,8 @@ export async function POST(request: Request) {
           } else if (subtaskActionType === 'convert') {
             await jira.updateIssue(subtaskKey, {
               fields: {
-                parent: null, // Remove parent to convert to task
-                issueType: { name: 'Task' }, // Or set appropriate issuetype
+                parent: null,
+                issueType: { name: 'Task' },
               },
             });
           } else {
@@ -58,7 +57,6 @@ export async function POST(request: Request) {
           }
         }
       } else if (action === 'delete' || action === 'convert') {
-        // Handle action for all subtasks
         for (const subtask of issue.fields.subtasks) {
           if (action === 'delete') {
             await jira.deleteIssue(subtask.key);
@@ -72,24 +70,29 @@ export async function POST(request: Request) {
           }
         }
       } else {
-       // If no action specified, return the subtasks and prompt user
-          const subtasks = issue.fields.subtasks.map((subtask: JiraIssue) => ({
-            key: subtask.key,
-            summary: subtask.fields.summary,
-          }));
+        const subtasks = issue.fields.subtasks.map((subtask: JiraIssue) => ({
+          key: subtask.key,
+          summary: subtask.fields.summary,
+        }));
 
-          return NextResponse.json(
-            {
-              error: `Issue '${issueKey}' has subtasks. Please specify the action to perform on subtasks.`,
-              subtasks,
-            },
-            { status: 400 } // Set the status code to 400 Bad Request
-          );
+        return NextResponse.json(
+          {
+            error: `Issue '${issueKey}' has subtasks. Please specify the action to perform on subtasks.`,
+            subtasks,
+          },
+          { status: 400 }
+        );
       }
     }
 
-    // Delete the main issue
+    // Delete the main issue from Jira
     await jira.deleteIssue(issueKey);
+
+    // Remove the embedding from Pinecone by ID using deleteOne
+    const index = pinecone.Index(PINECONE_INDEX_NAME);
+    await index.deleteOne(issueKey);
+
+    console.log(`Embedding for issue '${issueKey}' deleted from Pinecone.`);
 
     return NextResponse.json({
       message: `Issue '${issueKey}' and specified subtasks have been processed successfully.`,

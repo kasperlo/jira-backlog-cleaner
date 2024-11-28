@@ -33,7 +33,7 @@ export async function fetchAllIssues(config: JiraConfig): Promise<JiraIssue[]> {
 
 
 
-export async function generateEmbeddings(issues: JiraIssue[]): Promise<PineconeVector[]> {
+export async function generateEmbeddings(issues: JiraIssue[], projectKey: string): Promise<PineconeVector[]> {
   const embeddings = await Promise.all(
     issues.map(async (issue) => {
       const text = `${issue.fields.summary}\n${issue.fields.description || ''}`;
@@ -51,6 +51,7 @@ export async function generateEmbeddings(issues: JiraIssue[]): Promise<PineconeV
           description: issue.fields.description || '',
           issueType: issue.fields.issuetype.name,
           parentKey: issue.fields.parent?.key || '',
+          projectKey,
         },
       } as PineconeVector;
     })

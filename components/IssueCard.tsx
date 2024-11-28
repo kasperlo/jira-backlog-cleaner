@@ -17,8 +17,9 @@ import {
     AccordionButton,
     AccordionPanel,
     AccordionIcon,
+    Stack,
 } from '@chakra-ui/react';
-import { CheckIcon, AddIcon, DeleteIcon } from '@chakra-ui/icons';
+import { CheckIcon, DeleteIcon } from '@chakra-ui/icons';
 import React, { useState } from 'react';
 import { JiraIssue, Subtask } from '../types/types';
 import { IssueTypeBadge } from './IssueTypeBadge';
@@ -120,12 +121,6 @@ export const IssueCard: React.FC<IssueCardProps> = ({
         }
     };
 
-    // Handler for showing the subtask input field
-    const handleShowSubtaskInput = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setShowSubtaskInput(!showSubtaskInput);
-    };
-
     return (
         <Box
             borderWidth="1px"
@@ -166,11 +161,21 @@ export const IssueCard: React.FC<IssueCardProps> = ({
             </HStack>
 
             {/* Issue Summary */}
-            <Box mt={2}>
+            <Stack
+                direction={{ base: 'column', md: 'row' }}
+                display={{ base: 'none', md: 'flex' }}
+                width={{ base: 'full', md: 'auto' }}
+                alignItems="center"
+                minHeight="120px"
+                mt={{ base: 4, md: 2 }}
+                p={{ base: 4, md: 2 }}
+                bg={"gray.50"}
+                borderRadius="20px"
+            >
                 <Text fontSize="lg" fontWeight="bold">
                     {issue.fields?.summary || 'No summary available'}
                 </Text>
-            </Box>
+            </Stack>
 
             {/* Accordions for Description and Subtasks */}
             <Box mt={4} flex="1" overflowY="auto">
@@ -203,15 +208,6 @@ export const IssueCard: React.FC<IssueCardProps> = ({
                                     Subtasks
                                 </Box>
                                 <HStack spacing={2}>
-                                    <IconButton
-                                        icon={<AddIcon />}
-                                        aria-label="Add subtask"
-                                        size="sm"
-                                        colorScheme="blue"
-                                        onClick={handleShowSubtaskInput}
-                                        onFocus={(e) => e.stopPropagation()}
-                                        onClickCapture={(e) => e.stopPropagation()}
-                                    />
                                     <AccordionIcon />
                                 </HStack>
                             </AccordionButton>
@@ -269,46 +265,50 @@ export const IssueCard: React.FC<IssueCardProps> = ({
             </Box>
 
             {/* Conditionally Render Accept/Ignore Buttons for Merge Suggestion */}
-            {isNew && onAcceptSuggestion && onIgnoreSuggestion && (
-                <ButtonGroup spacing={4} mt={4}>
-                    <Button colorScheme="green" onClick={onAcceptSuggestion}>
-                        Accept Suggestion
-                    </Button>
-                    <Button colorScheme="red" onClick={onIgnoreSuggestion}>
-                        Ignore Suggestion
-                    </Button>
-                </ButtonGroup>
-            )}
+            {
+                isNew && onAcceptSuggestion && onIgnoreSuggestion && (
+                    <ButtonGroup spacing={4} mt={4}>
+                        <Button colorScheme="green" onClick={onAcceptSuggestion}>
+                            Accept Suggestion
+                        </Button>
+                        <Button colorScheme="red" onClick={onIgnoreSuggestion}>
+                            Ignore Suggestion
+                        </Button>
+                    </ButtonGroup>
+                )
+            }
 
             {/* Action Buttons */}
-            {!isNew && (
-                <Box mt={4} alignSelf="flex-end">
-                    <HStack spacing={2}>
-                        {onDelete && (
-                            <Tooltip label="Delete issue">
-                                <IconButton
-                                    icon={<DeleteIcon />}
-                                    aria-label="Delete issue"
-                                    size="sm"
-                                    colorScheme="red"
-                                    onClick={() => onDelete(issue.key)}
-                                />
-                            </Tooltip>
-                        )}
-                        {duplicateIssueKey && onMakeSubtask && (
-                            <Tooltip label={`Make subtask of ${duplicateIssueKey}`}>
-                                <IconButton
-                                    icon={<TbSubtask />}
-                                    aria-label="Make subtask"
-                                    size="sm"
-                                    colorScheme="blue"
-                                    onClick={() => onMakeSubtask(issue.key, duplicateIssueKey)}
-                                />
-                            </Tooltip>
-                        )}
-                    </HStack>
-                </Box>
-            )}
-        </Box>
+            {
+                !isNew && (
+                    <Box mt={4} alignSelf="flex-end">
+                        <HStack spacing={2}>
+                            {onDelete && (
+                                <Tooltip label="Delete issue">
+                                    <IconButton
+                                        icon={<DeleteIcon />}
+                                        aria-label="Delete issue"
+                                        size="sm"
+                                        colorScheme="red"
+                                        onClick={() => onDelete(issue.key)}
+                                    />
+                                </Tooltip>
+                            )}
+                            {duplicateIssueKey && onMakeSubtask && (
+                                <Tooltip label={`Make subtask of ${duplicateIssueKey}`}>
+                                    <IconButton
+                                        icon={<TbSubtask />}
+                                        aria-label="Make subtask"
+                                        size="sm"
+                                        colorScheme="blue"
+                                        onClick={() => onMakeSubtask(issue.key, duplicateIssueKey)}
+                                    />
+                                </Tooltip>
+                            )}
+                        </HStack>
+                    </Box>
+                )
+            }
+        </Box >
     );
 };

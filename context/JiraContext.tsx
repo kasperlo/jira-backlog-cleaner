@@ -1,5 +1,3 @@
-// context/JiraContext.tsx
-
 'use client';
 
 import { JiraConfig } from '../types/types';
@@ -20,10 +18,17 @@ const JiraContext = createContext<JiraContextProps | undefined>(undefined);
 export const JiraProvider = ({ children }: { children: ReactNode }) => {
     const [config, setConfig] = usePersistentState<JiraConfig | null>('jiraConfig', null);
     const [projectDescription, setProjectDescription] = usePersistentState<string>('projectDescription', '');
-    const [projectTitle, setProjectTitle] = useState<string>('');
+    const [projectTitle, setProjectTitle] = usePersistentState<string>('projectTitle', ''); // Added persistence for title
 
     return (
-        <JiraContext.Provider value={{ config, setConfig, projectDescription, setProjectDescription, projectTitle, setProjectTitle }}>
+        <JiraContext.Provider value={{
+            config,
+            setConfig,
+            projectDescription,
+            setProjectDescription,
+            projectTitle,
+            setProjectTitle,
+        }}>
             {children}
         </JiraContext.Provider>
     );

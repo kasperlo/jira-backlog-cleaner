@@ -12,7 +12,7 @@ import {
 } from '@chakra-ui/react';
 import { DuplicateGroup, JiraIssue } from '../types/types';
 import { IssueCard } from './IssueCard';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SimilarityBar } from './SimilarityBar';
 import axios from 'axios';
 import { useJira } from '@/context/JiraContext';
@@ -22,7 +22,6 @@ import { IssueListSkeleton } from './IssueListSkeleton';
 interface DuplicatesListProps {
     duplicates: DuplicateGroup[];
     setDuplicates: React.Dispatch<React.SetStateAction<DuplicateGroup[]>>;
-    onMerge: (group: DuplicateGroup) => void;
     onNotDuplicate: (group: DuplicateGroup) => void;
     onIgnore: (group: DuplicateGroup) => void;
     actionInProgress: boolean;
@@ -40,9 +39,16 @@ export function DuplicatesList({
     const [actionSuggestion, setActionSuggestion] = useState<string | null>(null);
     const [loadingMergeSuggestion, setLoadingMergeSuggestion] = useState(false);
     const [mergeSuggestion, setMergeSuggestion] = useState<JiraIssue | null>(null);
+    const [sortedDuplicates, setSortedDuplicates] = useState<DuplicateGroup[]>([]);
 
-    const totalPairs = duplicates.length;
-    const currentGroup = duplicates[currentIndex];
+
+    useEffect(() => {
+        const sorted = [...duplicates].sort((a, b) => b.similarityScore - a.similarityScore);
+        setSortedDuplicates(sorted);
+    }, [duplicates]);
+
+    const totalPairs = sortedDuplicates.length;
+    const currentGroup = sortedDuplicates[currentIndex];
 
     const toast = useToast();
 
@@ -146,6 +152,8 @@ export function DuplicatesList({
                 throw new Error('One or more issues could not be deleted. Please check your permissions and try again.');
             }
 
+            setDuplicates((prev) => prev.filter((group) => group !== currentGroup));
+
             toast({
                 title: 'Merge Accepted',
                 description: 'Original issues deleted and new merged issue created successfully.',
@@ -156,7 +164,6 @@ export function DuplicatesList({
 
             // Reset and move to the next duplicate pair
             setMergeSuggestion(null);
-            goToNext();
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.error('Error accepting merge suggestion:', error);
@@ -180,7 +187,6 @@ export function DuplicatesList({
             duration: 3000,
             isClosable: true,
         });
-        goToNext();
     };
 
     const handleDeleteIssue = async (issueKey: string) => {
@@ -211,15 +217,17 @@ export function DuplicatesList({
 
             if (response.status === 200) {
                 // Remove the duplicate pair from duplicates list
+                if (currentIndex === sortedDuplicates.length - 1) {
+                    goToPrevious()
+                }
                 setDuplicates((prev) => prev.filter((group) => group !== currentGroup));
+                setMergeSuggestion(null);
                 toast({
                     title: `Issue ${issueKey} and its subtasks deleted successfully.`,
                     status: 'success',
                     duration: 3000,
                     isClosable: true,
                 });
-                // Move to next duplicate pair
-                goToNext();
             } else {
                 console.error('Unexpected response status:', response.status);
                 throw new Error(response.data.error || 'Failed to delete issue.');
@@ -262,8 +270,13 @@ export function DuplicatesList({
                 config,
             });
 
+
             // Remove the duplicate pair from duplicates list
+            if (currentIndex === sortedDuplicates.length - 1) {
+                goToPrevious()
+            }
             setDuplicates((prev) => prev.filter((group) => group !== currentGroup));
+            setMergeSuggestion(null);
 
             toast({
                 title: `Issue ${subtaskIssueKey} has been converted into a subtask of ${parentIssueKey} and the original issue was deleted.`,
@@ -271,9 +284,6 @@ export function DuplicatesList({
                 duration: 3000,
                 isClosable: true,
             });
-
-            // Move to next duplicate pair
-            goToNext();
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.error('Error converting to subtask:', error);

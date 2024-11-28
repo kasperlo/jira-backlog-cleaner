@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       resetProgress(issues.length);
 
       // Generate embeddings
-      const vectors = await generateEmbeddings(issues);
+      const vectors = await generateEmbeddings(issues, config.projectKey);
 
       // Update progress
       for (let i = 0; i < vectors.length; i++) {

@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Box, Heading, Button, Tooltip, Text, VStack, Flex, ButtonGroup } from '@chakra-ui/react';
+import { Box, Heading, Button, Tooltip, Text, VStack, Flex, ButtonGroup, useToast } from '@chakra-ui/react';
 import JiraConfigForm from '../components/JiraConfigForm';
 import { useJira } from '../context/JiraContext';
 import { useIssueProcessing } from '../hooks/useIssueProcessing';
@@ -10,20 +10,21 @@ import { useDuplicateDetection } from '../hooks/useDuplicateDetection';
 import { useActionHandlers } from '../hooks/useActionHandlers';
 import { IssuesList } from '../components/IssuesList';
 import { DuplicatesList } from '../components/DuplicatesList';
-import { ConfirmationModal } from '../components/ConfirmationModal';
 import { DuplicateGroup, SuggestedIssue } from '../types/types';
 import { useEffect, useState } from 'react';
 import { IssueListSkeleton } from '@/components/IssueListSkeleton';
-import SuggestIssuesForm from '../components/SuggestIssuesForm';
-import SuggestedIssuesList from '../components/SuggestedIssuesList';
 import Header from '@/components/Header';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import ProjectDescriptionPanel from '@/components/ProjectDescriptionPanel';
+import NewFeaturesPanel from '@/components/NewFeaturesPanel';
 
 export default function HomePage() {
   const { config } = useJira();
   const [mounted, setMounted] = useState(false);
   const [suggestions, setSuggestions] = useState<SuggestedIssue[]>([]);
   const [selectedTab, setSelectedTab] = useState('list');
+
+  const toast = useToast()
 
   const {
     issues,
@@ -42,13 +43,6 @@ export default function HomePage() {
 
   const {
     actionInProgress,
-    selectedGroup,
-    actionType,
-    suggestion,
-    isConfirmationOpen,
-    onConfirmationClose,
-    openConfirmationModal,
-    handleAction,
     onExplain,
     onSuggestSummary,
     onEditSummary,
@@ -88,7 +82,7 @@ export default function HomePage() {
             rounded="2xl"
             size="lg"
           >
-            {processing ? 'Processing...' : 'Process Issues'}
+            {issues.length === 0 ? 'Fetch Issues' : 'Update Issues List'}
           </Button>
           <Tooltip
             label={
@@ -105,7 +99,7 @@ export default function HomePage() {
               rounded="2xl"
               size="lg"
             >
-              Detect Duplicates
+              {DuplicatesList.length === 0 ? "Find Duplicates in Backlog" : "Find Duplicates Again"}
             </Button>
           </Tooltip>
         </ButtonGroup>
@@ -148,12 +142,30 @@ export default function HomePage() {
               {duplicates.length > 0 ? (
                 <DuplicatesList
                   duplicates={duplicates}
-                  setDuplicates={setDuplicates} // Add this line
-                  onMerge={(group: DuplicateGroup) => openConfirmationModal(group, 'merge')}
-                  onNotDuplicate={(group: DuplicateGroup) => openConfirmationModal(group, 'notDuplicate')}
-                  onIgnore={(group: DuplicateGroup) => openConfirmationModal(group, 'ignore')}
+                  setDuplicates={setDuplicates}
+                  onNotDuplicate={(group: DuplicateGroup) => {
+                    // Immediately remove the group without confirmation
+                    setDuplicates((prev) => prev.filter((g) => g !== group));
+                    toast({
+                      title: 'Marked as not duplicate.',
+                      status: 'success',
+                      duration: 3000,
+                      isClosable: true,
+                    });
+                  }}
+                  onIgnore={(group: DuplicateGroup) => {
+                    // Immediately ignore the group without confirmation
+                    setDuplicates((prev) => prev.filter((g) => g !== group));
+                    toast({
+                      title: 'Issue ignored successfully.',
+                      status: 'info',
+                      duration: 3000,
+                      isClosable: true,
+                    });
+                  }}
                   actionInProgress={actionInProgress}
                 />
+
 
               ) : (
                 <Text>No duplicate issues detected.</Text>
@@ -162,25 +174,19 @@ export default function HomePage() {
           </TabsContent>
 
           <TabsContent value="suggestions">
-            <SuggestIssuesForm onSuggestionsReceived={setSuggestions} />
-            {suggestions.length > 0 && (
-              <Box mb={6}>
-                <SuggestedIssuesList suggestions={suggestions} setSuggestions={setSuggestions} />
+            <Flex>
+              <Box width="50%" pr={2}>
+                {/* Left-hand side */}
+                <ProjectDescriptionPanel suggestions={suggestions} setSuggestions={setSuggestions} />
               </Box>
-            )}
+              <Box width="50%" pl={2}>
+                {/* Right-hand side */}
+                <NewFeaturesPanel />
+              </Box>
+            </Flex>
           </TabsContent>
         </Tabs>
       )}
-
-      <ConfirmationModal
-        isOpen={isConfirmationOpen}
-        onClose={onConfirmationClose}
-        actionType={actionType}
-        selectedGroup={selectedGroup}
-        suggestion={suggestion}
-        handleAction={handleAction}
-        actionInProgress={actionInProgress}
-      />
     </Box>
   );
 }
