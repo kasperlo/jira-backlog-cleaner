@@ -9,6 +9,12 @@ export interface JiraIssue {
     issuetype: {
       name: string;
     };
+    status?: {
+      name: string;
+    };
+    priority?: {
+      name: string;
+    };
     parent?: {
       key: string;
     };
@@ -24,10 +30,11 @@ export interface JiraIssue {
         };
       };
     }>;
-    embedding?: number[]; // Optional embedding field
-    similarity?: number;  // Optional similarity score
+    embedding?: number[];
+    similarity?: number;
   };
 }
+
 
 export interface Suggestion {
   summary: string;
@@ -40,7 +47,7 @@ export type ActionType = 'merge' | 'notDuplicate' | 'ignore';
 export interface DuplicateGroup {
   group: JiraIssue[];
   explanation: string;
-  similarityScore: number; // Add this line
+  similarityScore: number;
 }
 
 

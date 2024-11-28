@@ -54,7 +54,7 @@ export function ConfirmationModal({
                             {suggestion ? (
                                 <Box>
                                     <Text mb={2} fontWeight="bold">
-                                        GPT-4 Recommendation (Action {suggestion.action}):
+                                        o1-preview Recommendation (Action {suggestion.action}):
                                     </Text>
                                     <Text mb={4}>{suggestion.description}</Text>
                                     {/* Display specific action details based on suggestion.action */}

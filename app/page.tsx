@@ -11,21 +11,19 @@ import { useActionHandlers } from '../hooks/useActionHandlers';
 import { IssuesList } from '../components/IssuesList';
 import { DuplicatesList } from '../components/DuplicatesList';
 import { ConfirmationModal } from '../components/ConfirmationModal';
-import { SubtaskModal } from '../components/SubtaskModal';
 import { DuplicateGroup, SuggestedIssue } from '../types/types';
 import { useEffect, useState } from 'react';
 import { IssueListSkeleton } from '@/components/IssueListSkeleton';
 import SuggestIssuesForm from '../components/SuggestIssuesForm';
 import SuggestedIssuesList from '../components/SuggestedIssuesList';
 import Header from '@/components/Header';
-
-// Import the custom tabs from shadcn/ui
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export default function HomePage() {
   const { config } = useJira();
   const [mounted, setMounted] = useState(false);
   const [suggestions, setSuggestions] = useState<SuggestedIssue[]>([]);
+  const [selectedTab, setSelectedTab] = useState('list');
 
   const {
     issues,
@@ -65,6 +63,19 @@ export default function HomePage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (config && !processing && issues.length === 0) {
+      startProcessing();
+      setSelectedTab('list');
+    }
+  }, [config]);
+
+  useEffect(() => {
+    if (!processing && issues.length > 0 && duplicates.length === 0 && !duplicateLoading) {
+      detectDuplicates();
+    }
+  }, [processing]);
 
   if (!mounted) {
     return null; // Or a loading indicator
@@ -109,11 +120,11 @@ export default function HomePage() {
       {!config ? (
         <JiraConfigForm />
       ) : (
-        <Tabs>
+        <Tabs value={selectedTab} onValueChange={setSelectedTab}>
           <Box width="100%" mb={4}>
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="list">List Issues</TabsTrigger>
-              <TabsTrigger value="duplicates">Detect Duplicate Issues</TabsTrigger>
+              <TabsTrigger value="list">Issues</TabsTrigger>
+              <TabsTrigger value="duplicates">Handle Duplicate Issues</TabsTrigger>
               <TabsTrigger value="suggestions">Get Suggestions for New Issues</TabsTrigger>
             </TabsList>
           </Box>
@@ -129,6 +140,7 @@ export default function HomePage() {
             ) : (
               <IssuesList
                 issues={issues}
+                onDelete={(issueKey) => Promise.resolve()}
                 onExplain={onExplain}
                 onSuggestSummary={onSuggestSummary}
                 onEditSummary={onEditSummary}
@@ -146,9 +158,6 @@ export default function HomePage() {
                   onMerge={(group: DuplicateGroup) => openConfirmationModal(group, 'merge')}
                   onNotDuplicate={(group: DuplicateGroup) => openConfirmationModal(group, 'notDuplicate')}
                   onIgnore={(group: DuplicateGroup) => openConfirmationModal(group, 'ignore')}
-                  onExplain={onExplain}
-                  onSuggestSummary={onSuggestSummary}
-                  onEditSummary={onEditSummary}
                   actionInProgress={actionInProgress}
                 />
 
@@ -167,19 +176,6 @@ export default function HomePage() {
             )}
           </TabsContent>
         </Tabs>
-      )}
-
-      {subtasks && subtasks.length > 0 && (
-        <SubtaskModal
-          isOpen={isSubtaskModalOpen}
-          onClose={() => {
-            setSubtasks(null);
-            onSubtaskModalClose();
-          }}
-          subtasks={subtasks}
-          handleSubtaskAction={handleSubtaskAction}
-          actionInProgress={actionInProgress}
-        />
       )}
 
       <ConfirmationModal

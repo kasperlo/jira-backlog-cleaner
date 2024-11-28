@@ -26,7 +26,7 @@ export async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise
   const index = pinecone.Index(PINECONE_INDEX_NAME);
   const duplicateGroups: DuplicateGroup[] = [];
   const processedIssues = new Set<string>();
-  const SIMILARITY_THRESHOLD = parseFloat(process.env.SIMILARITY_THRESHOLD || '0.5');
+  const SIMILARITY_THRESHOLD = parseFloat(process.env.SIMILARITY_THRESHOLD || '0.75');
 
   console.log(SIMILARITY_THRESHOLD)
 

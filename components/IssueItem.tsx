@@ -13,6 +13,10 @@ import { IssueModal } from './IssueModal';
 import { useState } from 'react';
 import { IssueTypeBadge } from './IssueTypeBadge';
 import { issueTypeColorMap, issueTypeIconMap } from '@/utils/issueTypeMappings';
+import { StatusBadge } from './StatusBadge';
+import { PriorityBadge } from './PriorityBadge';
+import { statusColorMap, statusIconMap } from '@/utils/statusMappings';
+import { priorityColorMap, priorityIconMap } from '@/utils/priorityMappings';
 
 interface IssueItemProps {
     issue: JiraIssue;
@@ -40,10 +44,16 @@ export function IssueItem({
     const [isFetching, setIsFetching] = useState(false);
 
     const issueType = issue.fields.issuetype.name;
-
     const issueTypeColors = issueTypeColorMap[issue.fields.issuetype.name] || { bg: 'gray', color: 'white' };
-
     const issueTypeIcon = issueTypeIconMap[issue.fields.issuetype.name];
+
+    const status = issue.fields.status?.name || 'Unknown';
+    const statusColors = statusColorMap[status] || { bg: 'gray', color: 'white' };
+    const statusIcon = statusIconMap[status];
+
+    const priority = issue.fields.priority?.name || 'None';
+    const priorityColors = priorityColorMap[priority] || { bg: 'gray', color: 'white' };
+    const priorityIcon = priorityIconMap[priority];
 
     const handleExplain = async () => {
         setIsFetching(true);
@@ -78,6 +88,16 @@ export function IssueItem({
                 <Box flex="1" minW="100px">
                     <Text fontWeight="bold">{issue.key}</Text>
                 </Box>
+                <Box flex="1" minW="100px">
+                    {issue.fields.priority && (
+                        <PriorityBadge
+                            priority={priority}
+                            icon={priorityIcon}
+                            color={priorityColors.color}
+                            size="md"
+                        />
+                    )}
+                </Box>
                 <Box flex="3" minW="200px">
                     <Text>{issue.fields.summary}</Text>
                 </Box>
@@ -88,6 +108,17 @@ export function IssueItem({
                     <Button size="sm" onClick={onOpen}>
                         Details
                     </Button>
+                </Box>
+                <Box flex="1" minW="100px">
+                    {issue.fields.status && (
+                        <StatusBadge
+                            status={status}
+                            icon={statusIcon}
+                            bgColor={statusColors.bg}
+                            textColor={statusColors.color}
+                            size="sm"
+                        />
+                    )}
                 </Box>
             </HStack>
 

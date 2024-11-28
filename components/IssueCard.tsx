@@ -27,6 +27,9 @@ import { issueTypeColorMap, issueTypeIconMap } from '../utils/issueTypeMappings'
 import { TbSubtask } from 'react-icons/tb';
 import axios from 'axios';
 import { useJira } from '@/context/JiraContext';
+import { statusColorMap, statusIconMap } from '@/utils/statusMappings';
+import { priorityColorMap, priorityIconMap } from '@/utils/priorityMappings';
+import { StatusBadge } from './StatusBadge';
 
 interface IssueCardProps {
     issue: JiraIssue;
@@ -54,6 +57,14 @@ export const IssueCard: React.FC<IssueCardProps> = ({
     const issueTypeColors = issueTypeColorMap[issueType] || { bg: 'gray', color: 'white' };
     const IssueTypeIcon = issueTypeIconMap[issueType];
     const subtasks: Subtask[] = issue.fields?.subtasks || [];
+
+    const status = issue.fields.status?.name || 'Unknown';
+    const statusColors = statusColorMap[status] || { bg: 'gray', color: 'white' };
+    const statusIcon = statusIconMap[status];
+
+    const priority = issue.fields.priority?.name || 'None';
+    const priorityColors = priorityColorMap[priority] || { bg: 'gray', color: 'white' };
+    const priorityIcon = priorityIconMap[priority];
 
     const { config } = useJira();
 
@@ -146,6 +157,14 @@ export const IssueCard: React.FC<IssueCardProps> = ({
                         {issue.key}
                     </Text>
                 </HStack>
+                {issue.fields.status && (
+                    <StatusBadge
+                        status={status}
+                        icon={statusIcon}
+                        bgColor={statusColors.bg}
+                        textColor={statusColors.color}
+                        size="sm"
+                    />)}
                 <Text fontSize="sm">
                     Created:{' '}
                     {issue.fields?.created ? new Date(issue.fields.created).toLocaleDateString() : 'N/A'}

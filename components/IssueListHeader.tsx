@@ -11,6 +11,9 @@ export function IssueListHeader() {
             <Box flex="1">
                 <Text fontWeight="bold">Issue Key</Text>
             </Box>
+            <Box flex="1">
+                <Text fontWeight="bold">Priority</Text>
+            </Box>
             <Box flex="3">
                 <Text fontWeight="bold">Summary</Text>
             </Box>
@@ -20,6 +23,10 @@ export function IssueListHeader() {
             <Box flex="1">
                 <Text fontWeight="bold">Actions</Text>
             </Box>
+            <Box flex="1">
+                <Text fontWeight="bold">Status</Text>
+            </Box>
+
         </HStack>
     );
 }

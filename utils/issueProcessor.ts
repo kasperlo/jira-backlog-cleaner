@@ -18,7 +18,7 @@ export async function fetchAllIssues(config: JiraConfig): Promise<JiraIssue[]> {
 
   do {
     const response = await jiraClient.searchJira(jql, {
-      fields: ['summary', 'description', 'issuetype', 'parent', 'created', 'subtasks'],
+      fields: ['*all'],
       maxResults,
       startAt,
     });

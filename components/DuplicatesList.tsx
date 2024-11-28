@@ -24,7 +24,7 @@ import { IssueListSkeleton } from './IssueListSkeleton';
 
 interface DuplicatesListProps {
     duplicates: DuplicateGroup[];
-    setDuplicates: React.Dispatch<React.SetStateAction<DuplicateGroup[]>>; // New prop to update duplicates list
+    setDuplicates: React.Dispatch<React.SetStateAction<DuplicateGroup[]>>;
     onMerge: (group: DuplicateGroup) => void;
     onNotDuplicate: (group: DuplicateGroup) => void;
     onIgnore: (group: DuplicateGroup) => void;
