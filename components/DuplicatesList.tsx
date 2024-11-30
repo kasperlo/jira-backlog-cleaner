@@ -22,14 +22,12 @@ import { IssueListSkeleton } from './IssueListSkeleton';
 interface DuplicatesListProps {
     duplicates: DuplicateGroup[];
     setDuplicates: React.Dispatch<React.SetStateAction<DuplicateGroup[]>>;
-    onNotDuplicate: (group: DuplicateGroup) => void;
     onIgnore: (group: DuplicateGroup) => void;
 }
 
 export function DuplicatesList({
     duplicates,
     setDuplicates,
-    onNotDuplicate,
     onIgnore,
 }: DuplicatesListProps) {
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -105,11 +103,12 @@ export function DuplicatesList({
             } else {
                 throw new Error(response.data.error || 'Failed to mark issue as duplicate.');
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.error('Error marking as duplicate:', error);
             toast({
                 title: 'Failed to mark as duplicate.',
-                description: error.response?.data?.error || 'Please try again later.',
+                description: errorMessage || 'Please try again later.',
                 status: 'error',
                 duration: 5000,
                 isClosable: true,

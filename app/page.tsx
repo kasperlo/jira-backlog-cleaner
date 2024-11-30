@@ -143,16 +143,6 @@ export default function HomePage() {
                 <DuplicatesList
                   duplicates={duplicates}
                   setDuplicates={setDuplicates}
-                  onNotDuplicate={(group: DuplicateGroup) => {
-                    // Immediately remove the group without confirmation
-                    setDuplicates((prev) => prev.filter((g) => g !== group));
-                    toast({
-                      title: 'Marked as not duplicate.',
-                      status: 'success',
-                      duration: 3000,
-                      isClosable: true,
-                    });
-                  }}
                   onIgnore={(group: DuplicateGroup) => {
                     // Immediately ignore the group without confirmation
                     setDuplicates((prev) => prev.filter((g) => g !== group));

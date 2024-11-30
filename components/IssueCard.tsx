@@ -5,13 +5,10 @@ import {
     Text,
     HStack,
     VStack,
-    Input,
     IconButton,
     Button,
-    useToast,
     ButtonGroup,
     Tooltip,
-    Spinner,
     Accordion,
     AccordionItem,
     AccordionButton,
@@ -19,14 +16,12 @@ import {
     AccordionIcon,
     Stack,
 } from '@chakra-ui/react';
-import { CheckIcon, DeleteIcon } from '@chakra-ui/icons';
+import { DeleteIcon } from '@chakra-ui/icons';
 import React, { useState } from 'react';
 import { JiraIssue, Subtask } from '../types/types';
 import { IssueTypeBadge } from './IssueTypeBadge';
 import { issueTypeColorMap, issueTypeIconMap } from '../utils/issueTypeMappings';
 import { TbSubtask } from 'react-icons/tb';
-import axios from 'axios';
-import { useJira } from '@/context/JiraContext';
 import { statusColorMap, statusIconMap } from '@/utils/statusMappings';
 import { StatusBadge } from './StatusBadge';
 import { HiOutlineDuplicate } from 'react-icons/hi';
@@ -56,7 +51,6 @@ export const IssueCard: React.FC<IssueCardProps> = ({
     isActionInProgress = false,
     onMarkAsDuplicate,
 }) => {
-    const toast = useToast();
     const issueType = issue.fields?.issuetype?.name || 'Unknown';
     const issueTypeColors = issueTypeColorMap[issueType] || { bg: 'gray', color: 'white' };
     const IssueTypeIcon = issueTypeIconMap[issueType];
@@ -66,66 +60,8 @@ export const IssueCard: React.FC<IssueCardProps> = ({
     const statusColors = statusColorMap[status] || { bg: 'gray', color: 'white' };
     const statusIcon = statusIconMap[status];
 
-    const { config } = useJira();
-
     // Subtask state
-    const [subtasksList, setSubtasksList] = useState<Subtask[]>(subtasks);
-    const [subtaskInputValue, setSubtaskInputValue] = useState('');
-    const [showSubtaskInput, setShowSubtaskInput] = useState(false);
-    const [isAddingSubtask, setIsAddingSubtask] = useState(false); // Loading state for adding subtask
-
-    // Handler for adding a new subtask
-    const handleAddSubtask = async () => {
-        if (!config) {
-            toast({
-                title: 'Jira configuration missing.',
-                description: 'Please configure your Jira settings first.',
-                status: 'error',
-                duration: 5000,
-                isClosable: true,
-            });
-            return;
-        }
-
-        if (subtaskInputValue.trim() === '') {
-            toast({
-                title: 'Invalid Subtask',
-                description: 'Subtask title cannot be empty.',
-                status: 'warning',
-                duration: 3000,
-                isClosable: true,
-            });
-            return;
-        }
-
-        setIsAddingSubtask(true); // Start loading
-
-        try {
-            // Call API to create subtask
-            const response = await axios.post('/api/create-subtask', {
-                parentIssueKey: issue.key,
-                summary: subtaskInputValue.trim(),
-                config,
-            });
-
-            const newSubtask = response.data.subtask as Subtask;
-            setSubtasksList([newSubtask, ...subtasksList]);
-            setSubtaskInputValue('');
-            setShowSubtaskInput(false);
-        } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            console.error('Error adding subtask:', error);
-            toast({
-                title: 'Failed to add subtask.',
-                description: errorMessage,
-                status: 'error',
-                duration: 5000,
-                isClosable: true,
-            });
-        } finally {
-            setIsAddingSubtask(false); // End loading
-        }
-    };
+    const [subtasksList] = useState<Subtask[]>(subtasks);
 
     return (
         <Box
