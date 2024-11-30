@@ -1,7 +1,5 @@
 // types/types.ts
 
-// types/types.ts
-
 export interface JiraIssue {
   id: string;
   key: string;
