@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       resetProgress(issues.length);
 
       // Generate embeddings
-      const vectors = await generateEmbeddings(issues);
+      const vectors = await generateEmbeddings(issues, config.projectKey);
 
       // Update progress
       for (let i = 0; i < vectors.length; i++) {
@@ -61,8 +61,21 @@ export async function POST(request: Request) {
       );
       return NextResponse.json({ error: 'Failed to process issues.' }, { status: 500 });
     }
-  }
+  } else if (action === 'fetch') {
+    // New fetch logic
+    try {
+      // Fetch all issues from Jira
+      const issues: JiraIssue[] = await fetchAllIssues(config);
+      console.log(`Total issues fetched: ${issues.length}`);
 
-  // Default response if action is not recognized
-  return NextResponse.json({ error: 'Invalid action specified.' }, { status: 400 });
+      // Return the issues to the frontend
+      return NextResponse.json({ issues }, { status: 200 });
+    } catch (error: unknown) {
+      console.error('Error fetching issues:', error);
+      return NextResponse.json({ error: 'Failed to fetch issues.' }, { status: 500 });
+    }
+  } else {
+    // Default response if action is not recognized
+    return NextResponse.json({ error: 'Invalid action specified.' }, { status: 400 });
+  }
 }

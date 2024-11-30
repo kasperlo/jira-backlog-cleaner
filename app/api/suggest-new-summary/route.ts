@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     // Call OpenAI's GPT-4 API
     const response = await retryWithExponentialBackoff(() =>
       openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-4o',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 60,
         temperature: 0.5,

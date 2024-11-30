@@ -70,8 +70,8 @@ You are a project management assistant. Analyze the following Jira issues for de
 
 ### Hierarchy Rules:
 - **Epics** can have Tasks, Stories, and Bugs as child issues.
-- **Tasks**, **Stories**, and **Bugs** can have Sub-tasks as child issues.
-- **Sub-tasks** cannot have child issues.
+- **Tasks**, **Stories**, and **Bugs** can have Subtasks as child issues.
+- **Subtasks** cannot have child issues.
 
 ### Possible Actions:
 1. **Delete One Issue and Keep the Other**: Remove the least descriptive or redundant issue and keep the more descriptive one.
@@ -101,7 +101,7 @@ Provide your recommendation in **JSON format only** using this structure. **Do n
 
 {
   "action": Number, // 1, 2, 3, or 4
-  "description": "Detailed description of the recommended action.",
+  "description": "Detailed description of the recommended action.", //For all actions
   "keepIssueKey": "IssueKey1", // Only for Action 1
   "deleteIssueKey": "IssueKey2", // Only for Action 1
   "deleteIssueKeys": ["IssueKey1", "IssueKey2"], // Only for Action 2
@@ -121,10 +121,10 @@ Ensure the JSON is the only output.
 
   const response = await retryWithExponentialBackoff(() =>
     openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 500,
-      temperature: 0,
+      temperature: 0.5,
     })
   );
 

@@ -67,7 +67,7 @@ Description: ${issue.fields.description || 'No description provided.'}
     // Call OpenAI's GPT-4 API
     const response = await retryWithExponentialBackoff(() =>
       openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-4o',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 200,
         temperature: 0.7,

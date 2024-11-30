@@ -4,7 +4,7 @@ import { JiraIssue, RecordMetadata } from '@/types/types';
 import pinecone from '../lib/pineconeClient';
 import { PINECONE_INDEX_NAME } from '@/config';
 
-export async function retrieveSimilarIssues(queryEmbedding: number[], topK: number = 10): Promise<JiraIssue[]> {
+export async function retrieveSimilarIssues(queryEmbedding: number[], topK: number = 10, projectKey: string): Promise<JiraIssue[]> {
   const index = pinecone.Index(PINECONE_INDEX_NAME);
 
   const queryResponse = await index.query({
@@ -12,6 +12,9 @@ export async function retrieveSimilarIssues(queryEmbedding: number[], topK: numb
     topK,
     includeMetadata: true,
     includeValues: false, // Set to true if you need the embeddings
+    filter: {
+      projectKey
+    }
   });
 
   if (!queryResponse.matches) {
@@ -48,13 +51,11 @@ export async function retrieveSimilarIssues(queryEmbedding: number[], topK: numb
         summary: String(metadata.summary || ''),
         description: String(metadata.description || ''),
         issuetype: {
-          name: String(metadata.issuetype || ''),
+          name: String(metadata.issueType || ''),
         },
         parent: metadata.parentKey ? { key: String(metadata.parentKey) } : undefined,
         created: String(metadata.created || new Date().toISOString()),
         subtasks,
-        // If embeddings are needed, include them here
-        // embedding,
         similarity: typeof match.score === 'number' ? match.score : undefined,
       },
     };

@@ -1,5 +1,7 @@
 // types/types.ts
 
+// types/types.ts
+
 export interface JiraIssue {
   id: string;
   key: string;
@@ -9,25 +11,48 @@ export interface JiraIssue {
     issuetype: {
       name: string;
     };
+    status?: {
+      name: string;
+    };
+    priority?: {
+      name: string;
+    };
     parent?: {
       key: string;
     };
     created: string;
-    subtasks?: Array<{
-      id: string;
-      key: string;
-      fields: {
-        summary: string;
-        description?: string;
-        issuetype: {
-          name: string;
-        };
-      };
-    }>;
-    embedding?: number[]; // Optional embedding field
-    similarity?: number;  // Optional similarity score
+    subtasks?: Subtask[];
+    embedding?: number[];
+    similarity?: number;
+    issuelinks?: IssueLink[];
   };
 }
+
+export interface IssueLink {
+  id: string;
+  type: {
+    id: string;
+    name: string;
+    inward: string;
+    outward: string;
+  };
+  inwardIssue?: {
+    id: string;
+    key: string;
+    fields: {
+      summary: string;
+    };
+  };
+  outwardIssue?: {
+    id: string;
+    key: string;
+    fields: {
+      summary: string;
+    };
+  };
+}
+
+
 
 export interface Suggestion {
   summary: string;
@@ -40,7 +65,9 @@ export type ActionType = 'merge' | 'notDuplicate' | 'ignore';
 export interface DuplicateGroup {
   group: JiraIssue[];
   explanation: string;
+  similarityScore: number;
 }
+
 
 export interface ActionSuggestion {
   action: 1 | 2 | 3 | 4;
@@ -68,16 +95,27 @@ export interface ProgressData {
   errorMessage?: string;
 }
 
+export interface ErrorResponse {
+  errors?: Record<string, string>; // Assuming `errors` is an object with string keys and values
+  errorMessages?: string[];
+}
+
 export interface PineconeVector {
   id: string;
   values: number[];
-  metadata?: Record<string, any>;
+  metadata?: {
+    issueKey: string;
+    summary: string;
+    description?: string;
+    issueType: string; // Ensure this matches the key used in metadata
+    parentKey?: string;
+  };
 }
 
 export interface SuggestedIssue {
   summary: string;
   description: string;
-  issuetype: 'Story' | 'Task' | 'Sub-task';
+  issueType: 'Story' | 'Task' | 'Subtask';
   explanation: string;
 }
 
@@ -85,7 +123,7 @@ export interface RecordMetadata {
   issueKey?: string;
   summary?: string;
   description?: string;
-  issuetype?: string;
+  issueType?: string;
   parentKey?: string;
   created?: string;
   subtasks?: Array<{
@@ -117,6 +155,9 @@ export interface IssueData {
 export interface IssueType {
   id: string;
   name: string;
+  subtask: boolean; // Add this line
+  description?: string; // Optionally include other properties
+  fields?: Record<string, unknown>; // Include this if you need access to the issue type's fields
 }
 
 export interface ProjectMeta {
@@ -125,11 +166,25 @@ export interface ProjectMeta {
 }
 
 export interface Subtask {
+  id: string;
   key: string;
-  summary: string;
+  fields: {
+      summary: string;
+      description?: string;
+      issuetype: {
+          name: string;
+      };
+  };
 }
+
 
 export interface SubtaskAction {
   subtaskKey: string;
   action: 'delete' | 'convert';
+}
+
+export interface SubtaskInput {
+  id: number;
+  title: string;
+  isConfirmed: boolean;
 }

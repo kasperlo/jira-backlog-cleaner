@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Box, Heading, Button, Tooltip, Text, VStack } from '@chakra-ui/react';
+import { Box, Heading, Button, Tooltip, Text, VStack, Flex, ButtonGroup, useToast } from '@chakra-ui/react';
 import JiraConfigForm from '../components/JiraConfigForm';
 import { useJira } from '../context/JiraContext';
 import { useIssueProcessing } from '../hooks/useIssueProcessing';
@@ -10,21 +10,25 @@ import { useDuplicateDetection } from '../hooks/useDuplicateDetection';
 import { useActionHandlers } from '../hooks/useActionHandlers';
 import { IssuesList } from '../components/IssuesList';
 import { DuplicatesList } from '../components/DuplicatesList';
-import { ConfirmationModal } from '../components/ConfirmationModal';
-import { SubtaskModal } from '../components/SubtaskModal';
 import { DuplicateGroup, SuggestedIssue } from '../types/types';
 import { useEffect, useState } from 'react';
 import { IssueListSkeleton } from '@/components/IssueListSkeleton';
-import SuggestIssuesForm from '../components/SuggestIssuesForm';
-import SuggestedIssuesList from '../components/SuggestedIssuesList';
+import Header from '@/components/Header';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import ProjectDescriptionPanel from '@/components/ProjectDescriptionPanel';
+import NewFeaturesPanel from '@/components/NewFeaturesPanel';
 
 export default function HomePage() {
   const { config } = useJira();
   const [mounted, setMounted] = useState(false);
   const [suggestions, setSuggestions] = useState<SuggestedIssue[]>([]);
+  const [selectedTab, setSelectedTab] = useState('list');
+
+  const toast = useToast()
 
   const {
     issues,
+    setIssues,
     processing,
     startProcessing,
     fetchIssuesData,
@@ -39,27 +43,27 @@ export default function HomePage() {
 
   const {
     actionInProgress,
-    selectedGroup,
-    actionType,
-    suggestion,
-    subtasks,
-    isConfirmationOpen,
-    onConfirmationClose,
-    isSubtaskModalOpen,
-    onSubtaskModalClose,
-    openConfirmationModal,
-    handleAction,
-    handleSubtaskAction,
-    handleDeleteIssueResponse,
     onExplain,
     onSuggestSummary,
     onEditSummary,
-    setSubtasks,
-  } = useActionHandlers(fetchIssuesData, issues, setDuplicates);
+  } = useActionHandlers(fetchIssuesData, issues, setIssues, setDuplicates);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (config && !processing && issues.length === 0) {
+      startProcessing();
+      setSelectedTab('list');
+    }
+  }, [config]);
+
+  useEffect(() => {
+    if (!processing && issues.length > 0 && duplicates.length === 0 && !duplicateLoading) {
+      detectDuplicates();
+    }
+  }, [processing]);
 
   if (!mounted) {
     return null; // Or a loading indicator
@@ -67,65 +71,53 @@ export default function HomePage() {
 
   return (
     <Box p={6}>
-      <Heading mb={6}>Jira Backlog Manager</Heading>
+      <Flex alignItems="center" justifyContent="space-between" mb={6}>
+        <Header />
+        <ButtonGroup spacing={4}>
+          <Button
+            colorScheme="teal"
+            onClick={startProcessing}
+            isLoading={processing}
+            isDisabled={processing}
+            rounded="2xl"
+            size="lg"
+          >
+            {issues.length === 0 ? 'Fetch Issues' : 'Update Issues List'}
+          </Button>
+          <Tooltip
+            label={
+              issues.length === 0
+                ? 'Process issues before detecting duplicates'
+                : 'Start detection'
+            }
+          >
+            <Button
+              colorScheme="blue"
+              onClick={detectDuplicates}
+              isLoading={duplicateLoading}
+              disabled={issues.length === 0}
+              rounded="2xl"
+              size="lg"
+            >
+              {DuplicatesList.length === 0 ? "Find Duplicates in Backlog" : "Find Duplicates Again"}
+            </Button>
+          </Tooltip>
+        </ButtonGroup>
+      </Flex>
 
       {!config ? (
         <JiraConfigForm />
       ) : (
-        <>
-          <SuggestIssuesForm onSuggestionsReceived={setSuggestions} />
+        <Tabs value={selectedTab} onValueChange={setSelectedTab}>
+          <Box width="100%" mb={4}>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="list">Issues</TabsTrigger>
+              <TabsTrigger value="duplicates">Handle Duplicate Issues</TabsTrigger>
+              <TabsTrigger value="suggestions">Get Suggestions for New Issues</TabsTrigger>
+            </TabsList>
+          </Box>
 
-          {suggestions.length > 0 && (
-            <Box mb={6}>
-              <SuggestedIssuesList suggestions={suggestions} setSuggestions={setSuggestions} />
-            </Box>
-          )}
-
-          <VStack spacing={6} align="center" mb={6}>
-            <Button
-              colorScheme="teal"
-              onClick={startProcessing}
-              isLoading={processing}
-              isDisabled={processing}
-              width="60%"
-            >
-              {processing ? 'Processing...' : 'Process Issues'}
-            </Button>
-            <Tooltip
-              label={
-                issues.length === 0
-                  ? 'Process issues before detecting duplicates'
-                  : 'Start detection'
-              }
-            >
-              <Button
-                colorScheme="blue"
-                onClick={detectDuplicates}
-                isLoading={duplicateLoading}
-                disabled={issues.length === 0}
-                width="60%"
-              >
-                Detect Duplicates
-              </Button>
-            </Tooltip>
-          </VStack>
-
-          {duplicates.length > 0 && (
-            <Box mb={6}>
-              <DuplicatesList
-                duplicates={duplicates}
-                onMerge={(group: DuplicateGroup) => openConfirmationModal(group, 'merge')}
-                onNotDuplicate={(group: DuplicateGroup) => openConfirmationModal(group, 'notDuplicate')}
-                onIgnore={(group: DuplicateGroup) => openConfirmationModal(group, 'ignore')}
-                onExplain={onExplain}
-                onSuggestSummary={onSuggestSummary}
-                onEditSummary={onEditSummary}
-                actionInProgress={actionInProgress}
-              />
-            </Box>
-          )}
-
-          <Box>
+          <TabsContent value="list">
             <Heading size="md" mt={6} mb={4}>
               All Issues
             </Heading>
@@ -136,40 +128,53 @@ export default function HomePage() {
             ) : (
               <IssuesList
                 issues={issues}
-                onDelete={handleDeleteIssueResponse}
+                onDelete={() => Promise.resolve()}
                 onExplain={onExplain}
                 onSuggestSummary={onSuggestSummary}
                 onEditSummary={onEditSummary}
                 actionInProgress={actionInProgress}
               />
             )}
-          </Box>
+          </TabsContent>
 
-          {/* Include SubtaskModal */}
-          {subtasks && subtasks.length > 0 && (
-            <SubtaskModal
-              isOpen={isSubtaskModalOpen}
-              onClose={() => {
-                setSubtasks(null);
-                onSubtaskModalClose();
-              }}
-              subtasks={subtasks}
-              handleSubtaskAction={handleSubtaskAction}
-              actionInProgress={actionInProgress}
-            />
-          )}
+          <TabsContent value="duplicates">
+            <VStack spacing={6} align="center" mb={6}>
+              {duplicates.length > 0 ? (
+                <DuplicatesList
+                  duplicates={duplicates}
+                  setDuplicates={setDuplicates}
+                  onIgnore={(group: DuplicateGroup) => {
+                    // Immediately ignore the group without confirmation
+                    setDuplicates((prev) => prev.filter((g) => g !== group));
+                    toast({
+                      title: 'Issue ignored successfully.',
+                      status: 'info',
+                      duration: 3000,
+                      isClosable: true,
+                    });
+                  }}
+                />
 
-          {/* Existing ConfirmationModal */}
-          <ConfirmationModal
-            isOpen={isConfirmationOpen}
-            onClose={onConfirmationClose}
-            actionType={actionType}
-            selectedGroup={selectedGroup}
-            suggestion={suggestion}
-            handleAction={handleAction}
-            actionInProgress={actionInProgress}
-          />
-        </>
+
+              ) : (
+                <Text>No duplicate issues detected.</Text>
+              )}
+            </VStack>
+          </TabsContent>
+
+          <TabsContent value="suggestions">
+            <Flex>
+              <Box width="50%" pr={2}>
+                {/* Left-hand side */}
+                <ProjectDescriptionPanel suggestions={suggestions} setSuggestions={setSuggestions} />
+              </Box>
+              <Box width="50%" pl={2}>
+                {/* Right-hand side */}
+                <NewFeaturesPanel />
+              </Box>
+            </Flex>
+          </TabsContent>
+        </Tabs>
       )}
     </Box>
   );

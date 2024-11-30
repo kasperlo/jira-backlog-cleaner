@@ -19,6 +19,7 @@ import {
     ModalCloseButton,
     ModalBody,
     ModalFooter,
+    Tooltip,
 } from '@chakra-ui/react';
 import { SuggestedIssue, SimilarIssue } from '../types/types';
 import { useJira } from '../context/JiraContext';
@@ -137,7 +138,7 @@ const SuggestedIssuesList: React.FC<SuggestedIssuesListProps> = ({ suggestions, 
                             <Text fontWeight="bold">{suggestion.summary}</Text>
                             <Text>{suggestion.description}</Text>
                             <Text fontStyle="italic" color="gray.600">
-                                {suggestion.issuetype}
+                                {suggestion.issueType}
                             </Text>
                             <Text color="gray.500">{suggestion.explanation}</Text>
                             <HStack spacing={2}>
@@ -147,12 +148,14 @@ const SuggestedIssuesList: React.FC<SuggestedIssuesListProps> = ({ suggestions, 
                                 >
                                     Create in Jira
                                 </Button>
-                                <Button
-                                    colorScheme="blue"
-                                    onClick={() => fetchSimilarIssues(suggestion)}
-                                >
-                                    Show Similar Issues
-                                </Button>
+                                <Tooltip label="Show most similar issues from project backlog">
+                                    <Button
+                                        colorScheme="blue"
+                                        onClick={() => fetchSimilarIssues(suggestion)}
+                                    >
+                                        Show Similar Issues
+                                    </Button>
+                                </Tooltip>
                             </HStack>
                         </VStack>
                     </ListItem>
@@ -178,7 +181,7 @@ const SuggestedIssuesList: React.FC<SuggestedIssuesListProps> = ({ suggestions, 
                                         <Box borderWidth="1px" borderRadius="md" p={3} bg="gray.100">
                                             <Text fontWeight="bold">{currentIssue.summary}</Text>
                                             <Text fontSize="sm" color="gray.600">
-                                                Type: {currentIssue.issuetype}
+                                                Type: {currentIssue.issueType}
                                             </Text>
                                         </Box>
                                     </Box>
@@ -212,8 +215,6 @@ const SuggestedIssuesList: React.FC<SuggestedIssuesListProps> = ({ suggestions, 
                             </>
                         )}
                     </ModalBody>
-
-
                     <ModalFooter>
                         <Button colorScheme="blue" mr={3} onClick={closeModal}>
                             Close

@@ -63,6 +63,7 @@ export function useIssueProcessing() {
       setProcessing(false);
     }
   };
+
   const fetchIssuesData = async () => {
     if (!config) {
       toast({
@@ -76,13 +77,12 @@ export function useIssueProcessing() {
     }
 
     setProcessing(true);
-    setIssues([]);
     setError('');
 
     try {
       const response = await axios.post('/api/issues', {
         config,
-        action: 'fetch', // Make sure your backend supports this action
+        action: 'fetch',
       });
 
       if (response.status === 200) {
@@ -116,9 +116,10 @@ export function useIssueProcessing() {
 
   return {
     issues,
+    setIssues, // Expose setIssues here
     processing,
     error,
     startProcessing,
-    fetchIssuesData, // Add it back here
+    fetchIssuesData,
   };
 }
