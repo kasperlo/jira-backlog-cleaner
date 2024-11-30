@@ -1,4 +1,4 @@
-// jira-backlog-cleaner/app/api/suggest-new-issues/route.ts
+// app/api/suggest-new-issues/route.ts
 
 import { NextResponse } from 'next/server';
 import openai from '../../../lib/openaiClient';
@@ -26,6 +26,20 @@ const suggestionSchema = {
   },
 };
 const validate = ajv.compile(suggestionSchema);
+
+// Function to extract JSON array from the response text
+function extractJsonFromResponse(responseText: string): string {
+  // Remove code block delimiters and language specifiers
+  responseText = responseText.replace(/```json\s*/g, '').replace(/```/g, '').trim();
+
+  // Extract the JSON array using a regular expression
+  const jsonMatch = responseText.match(/\[.*\]/s);
+  if (jsonMatch) {
+    return jsonMatch[0];
+  } else {
+    throw new Error('No JSON array found in the response.');
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -109,7 +123,8 @@ You are a project management assistant. Based on the following project descripti
      - **"explanation"**: A brief explanation of why this issue is suggested and which uncovered area of the project it addresses.
 
 5. **Format:**
-   - Return the suggestions strictly in the following JSON array format without any additional text or explanations:
+   - Return the suggestions strictly in the following JSON array format without any additional text, explanations, or code block formatting (do not use triple backticks or specify the language). Do not include any markdown syntax.
+   - Output only valid JSON. Do not include any introductory or concluding text.
 
 [
   {
@@ -128,7 +143,6 @@ ${projectDescription}
 
 **Existing Issues:**
 """
-
 ${existingIssuesText}
 """
 
@@ -141,7 +155,7 @@ ${exampleIssuesText}
     console.log('Prompt constructed for OpenAI:', prompt);
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 1000,
       temperature: 0.7,
@@ -151,10 +165,13 @@ ${exampleIssuesText}
 
     let suggestions: SuggestedIssue[] = [];
     try {
-      suggestions = JSON.parse(suggestionsText || "[]");
+      // Sanitize the response by extracting the JSON array
+      const sanitizedText = extractJsonFromResponse(suggestionsText || '[]');
+      suggestions = JSON.parse(sanitizedText);
 
       const valid = validate(suggestions);
       if (!valid) {
+        console.error('Validation errors:', validate.errors);
         throw new Error('Invalid suggestions format received from OpenAI.');
       }
 
@@ -169,7 +186,7 @@ ${exampleIssuesText}
         );
 
         const suggestionEmbedding = suggestionEmbeddingResponse.data[0].embedding;
-        const duplicateCheckResponse = await pinecone.index(PINECONE_INDEX_NAME).query({
+        const duplicateCheckResponse = await index.query({
           vector: suggestionEmbedding,
           topK: 1,
           includeMetadata: false,
@@ -194,7 +211,6 @@ ${exampleIssuesText}
       console.error('Error parsing or validating OpenAI response:', err);
       return NextResponse.json({ error: 'Failed to parse OpenAI response.' }, { status: 500 });
     }
-
   } catch (err: unknown) {
     console.error('Error in suggest-new-issues endpoint:', err);
     return NextResponse.json({ error: 'Internal server error in suggest-new-issues endpoint.' }, { status: 500 });

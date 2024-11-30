@@ -29,17 +29,21 @@ import axios from 'axios';
 import { useJira } from '@/context/JiraContext';
 import { statusColorMap, statusIconMap } from '@/utils/statusMappings';
 import { StatusBadge } from './StatusBadge';
+import { HiOutlineDuplicate } from 'react-icons/hi';
 
 interface IssueCardProps {
     issue: JiraIssue;
-    isNew?: boolean; // Flag to identify if this is the new merged issue
-    onSubtasksChange?: (subtasks: string[]) => void; // Callback to pass subtasks to parent
-    onAcceptSuggestion?: () => void; // Optional prop for handling accept
-    onIgnoreSuggestion?: () => void; // Optional prop for handling ignore
-    onDelete?: (issueKey: string) => void; // Optional prop for deleting an issue
-    onMakeSubtask?: (subtaskIssueKey: string, parentIssueKey: string) => void; // Optional prop for making subtask
-    duplicateIssueKey?: string; // Key of the duplicate issue to make this a subtask
+    isNew?: boolean;
+    onSubtasksChange?: (subtasks: string[]) => void;
+    onAcceptSuggestion?: () => void;
+    onIgnoreSuggestion?: () => void;
+    onDelete?: (issueKey: string) => void;
+    onMakeSubtask?: (subtaskIssueKey: string, parentIssueKey: string) => void;
+    onMarkAsDuplicate?: (sourceIssueKey: string, targetIssueKey: string) => void;
+    duplicateIssueKey?: string;
+    isActionInProgress?: boolean;
 }
+
 
 export const IssueCard: React.FC<IssueCardProps> = ({
     issue,
@@ -49,6 +53,8 @@ export const IssueCard: React.FC<IssueCardProps> = ({
     onDelete,
     onMakeSubtask,
     duplicateIssueKey,
+    isActionInProgress = false,
+    onMarkAsDuplicate,
 }) => {
     const toast = useToast();
     const issueType = issue.fields?.issuetype?.name || 'Unknown';
@@ -153,10 +159,10 @@ export const IssueCard: React.FC<IssueCardProps> = ({
                         bgColor={statusColors.bg}
                         textColor={statusColors.color}
                         size="sm"
-                    />)}
+                    />
+                )}
                 <Text fontSize="sm">
-                    Created:{' '}
-                    {issue.fields?.created ? new Date(issue.fields.created).toLocaleDateString() : 'N/A'}
+                    Created: {issue.fields?.created ? new Date(issue.fields.created).toLocaleDateString() : 'N/A'}
                 </Text>
             </HStack>
 
@@ -169,7 +175,7 @@ export const IssueCard: React.FC<IssueCardProps> = ({
                 minHeight="120px"
                 mt={{ base: 4, md: 2 }}
                 p={{ base: 4, md: 2 }}
-                bg={"gray.50"}
+                bg={'gray.50'}
                 borderRadius="20px"
             >
                 <Text fontSize="lg" fontWeight="bold">
@@ -180,7 +186,6 @@ export const IssueCard: React.FC<IssueCardProps> = ({
             {/* Accordions for Description and Subtasks */}
             <Box mt={4} flex="1" overflowY="auto">
                 <Accordion allowToggle>
-
                     {/* Description Accordion */}
                     <AccordionItem>
                         <>
@@ -212,26 +217,6 @@ export const IssueCard: React.FC<IssueCardProps> = ({
                                 </HStack>
                             </AccordionButton>
                             <AccordionPanel pb={4}>
-                                {showSubtaskInput && (
-                                    <HStack mt={2}>
-                                        <Input
-                                            placeholder="New subtask title"
-                                            value={subtaskInputValue}
-                                            onChange={(e) => setSubtaskInputValue(e.target.value)}
-                                            size="sm"
-                                            isDisabled={isAddingSubtask}
-                                        />
-                                        <IconButton
-                                            icon={isAddingSubtask ? <Spinner size="sm" /> : <CheckIcon />}
-                                            aria-label="Confirm add subtask"
-                                            size="sm"
-                                            colorScheme="green"
-                                            onClick={handleAddSubtask}
-                                            isLoading={isAddingSubtask}
-                                            isDisabled={isAddingSubtask}
-                                        />
-                                    </HStack>
-                                )}
                                 <VStack align="start" spacing={1} mt={2}>
                                     {subtasksList.length > 0 ? (
                                         subtasksList.map((subtask) => (
@@ -260,55 +245,78 @@ export const IssueCard: React.FC<IssueCardProps> = ({
                             </AccordionPanel>
                         </>
                     </AccordionItem>
-
                 </Accordion>
             </Box>
 
             {/* Conditionally Render Accept/Ignore Buttons for Merge Suggestion */}
-            {
-                isNew && onAcceptSuggestion && onIgnoreSuggestion && (
-                    <ButtonGroup spacing={4} mt={4}>
-                        <Button colorScheme="green" onClick={onAcceptSuggestion}>
-                            Accept Suggestion
-                        </Button>
-                        <Button colorScheme="red" onClick={onIgnoreSuggestion}>
-                            Ignore Suggestion
-                        </Button>
-                    </ButtonGroup>
-                )
-            }
+            {isNew && onAcceptSuggestion && onIgnoreSuggestion && (
+                <ButtonGroup spacing={4} mt={4}>
+                    <Button
+                        colorScheme="green"
+                        onClick={onAcceptSuggestion}
+                        isLoading={isActionInProgress}
+                        isDisabled={isActionInProgress}
+                    >
+                        Accept Suggestion
+                    </Button>
+                    <Button
+                        colorScheme="red"
+                        onClick={onIgnoreSuggestion}
+                        isLoading={isActionInProgress}
+                        isDisabled={isActionInProgress}
+                    >
+                        Ignore Suggestion
+                    </Button>
+                </ButtonGroup>
+            )}
 
             {/* Action Buttons */}
-            {
-                !isNew && (
-                    <Box mt={4} alignSelf="flex-end">
-                        <HStack spacing={2}>
-                            {onDelete && (
-                                <Tooltip label="Delete issue">
-                                    <IconButton
-                                        icon={<DeleteIcon />}
-                                        aria-label="Delete issue"
-                                        size="sm"
-                                        colorScheme="red"
-                                        onClick={() => onDelete(issue.key)}
-                                    />
-                                </Tooltip>
-                            )}
-                            {duplicateIssueKey && onMakeSubtask && (
-                                <Tooltip label={`Make subtask of ${duplicateIssueKey}`}>
-                                    <IconButton
-                                        icon={<TbSubtask />}
-                                        aria-label="Make subtask"
-                                        size="sm"
-                                        colorScheme="blue"
-                                        onClick={() => onMakeSubtask(issue.key, duplicateIssueKey)}
-                                    />
-                                </Tooltip>
-                            )}
-                        </HStack>
-                    </Box>
-                )
-            }
-        </Box >
+            {!isNew && (
+                <Box mt={4} alignSelf="flex-end">
+                    <HStack spacing={2}>
+                        {onDelete && (
+                            <Tooltip label="Delete issue">
+                                <IconButton
+                                    icon={<DeleteIcon />}
+                                    aria-label="Delete issue"
+                                    size="sm"
+                                    colorScheme="red"
+                                    onClick={() => onDelete(issue.key)}
+                                    isLoading={isActionInProgress}
+                                    isDisabled={isActionInProgress}
+                                />
+                            </Tooltip>
+                        )}
+                        {duplicateIssueKey && onMakeSubtask && (
+                            <Tooltip label={`Make subtask of ${duplicateIssueKey}`}>
+                                <IconButton
+                                    icon={<TbSubtask />}
+                                    aria-label="Make subtask"
+                                    size="sm"
+                                    colorScheme="blue"
+                                    onClick={() => onMakeSubtask(issue.key, duplicateIssueKey)}
+                                    isLoading={isActionInProgress}
+                                    isDisabled={isActionInProgress}
+                                />
+                            </Tooltip>
+                        )}
+
+                        {duplicateIssueKey && onMarkAsDuplicate && (
+                            <Tooltip label={`Mark ${issue.key} as duplicate of ${duplicateIssueKey} in Jira`}>
+                                <IconButton
+                                    icon={<HiOutlineDuplicate />}
+                                    aria-label="Mark as duplicate"
+                                    size="sm"
+                                    colorScheme="green"
+                                    onClick={() => onMarkAsDuplicate(issue.key, duplicateIssueKey)}
+                                    isLoading={isActionInProgress}
+                                    isDisabled={isActionInProgress}
+                                />
+                            </Tooltip>
+                        )}
+                    </HStack>
+                </Box>
+            )}
+        </Box>
     );
 };

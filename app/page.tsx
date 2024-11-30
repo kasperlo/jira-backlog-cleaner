@@ -163,7 +163,6 @@ export default function HomePage() {
                       isClosable: true,
                     });
                   }}
-                  actionInProgress={actionInProgress}
                 />
 
 

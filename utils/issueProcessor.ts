@@ -31,30 +31,35 @@ export async function fetchAllIssues(config: JiraConfig): Promise<JiraIssue[]> {
   return allIssues;
 }
 
-
-
 export async function generateEmbeddings(issues: JiraIssue[], projectKey: string): Promise<PineconeVector[]> {
   const embeddings = await Promise.all(
-    issues.map(async (issue) => {
-      const text = `${issue.fields.summary}\n${issue.fields.description || ''}`;
-      const embeddingResponse = await openai.embeddings.create({
-        model: OPENAI_EMBEDDING_MODEL,
-        input: text,
-      });
-      const embedding = embeddingResponse.data[0].embedding;
-      return {
-        id: issue.key,
-        values: embedding,
-        metadata: {
-          issueKey: issue.key,
-          summary: issue.fields.summary,
-          description: issue.fields.description || '',
-          issueType: issue.fields.issuetype.name,
-          parentKey: issue.fields.parent?.key || '',
-          projectKey,
-        },
-      } as PineconeVector;
-    })
+      issues.map(async (issue) => {
+          const text = `${issue.fields.summary}\n${issue.fields.description || ''}`;
+          const embeddingResponse = await openai.embeddings.create({
+              model: OPENAI_EMBEDDING_MODEL,
+              input: text,
+          });
+          const embedding = embeddingResponse.data[0].embedding;
+
+          // Collect existing duplicate links from the issue
+          const linkedIssues = issue.fields.issuelinks
+              ?.filter((link) => link.type.name === 'Duplicate' && link.inwardIssue?.key)
+              .map((link) => link.inwardIssue?.key || link.outwardIssue?.key) || [];
+
+          return {
+              id: issue.key,
+              values: embedding,
+              metadata: {
+                  issueKey: issue.key,
+                  summary: issue.fields.summary,
+                  description: issue.fields.description || '',
+                  issueType: issue.fields.issuetype.name,
+                  parentKey: issue.fields.parent?.key || '',
+                  projectKey,
+                  links: linkedIssues, // Add existing links metadata
+              },
+          } as PineconeVector;
+      })
   );
   return embeddings;
 }

@@ -1,5 +1,7 @@
 // types/types.ts
 
+// types/types.ts
+
 export interface JiraIssue {
   id: string;
   key: string;
@@ -19,21 +21,37 @@ export interface JiraIssue {
       key: string;
     };
     created: string;
-    subtasks?: Array<{
-      id: string;
-      key: string;
-      fields: {
-        summary: string;
-        description?: string;
-        issuetype: {
-          name: string;
-        };
-      };
-    }>;
+    subtasks?: Subtask[];
     embedding?: number[];
     similarity?: number;
+    issuelinks?: IssueLink[];
   };
 }
+
+export interface IssueLink {
+  id: string;
+  type: {
+    id: string;
+    name: string;
+    inward: string;
+    outward: string;
+  };
+  inwardIssue?: {
+    id: string;
+    key: string;
+    fields: {
+      summary: string;
+    };
+  };
+  outwardIssue?: {
+    id: string;
+    key: string;
+    fields: {
+      summary: string;
+    };
+  };
+}
+
 
 
 export interface Suggestion {
@@ -137,6 +155,9 @@ export interface IssueData {
 export interface IssueType {
   id: string;
   name: string;
+  subtask: boolean; // Add this line
+  description?: string; // Optionally include other properties
+  fields?: Record<string, unknown>; // Include this if you need access to the issue type's fields
 }
 
 export interface ProjectMeta {
@@ -153,7 +174,6 @@ export interface Subtask {
       issuetype: {
           name: string;
       };
-      // Add other fields if necessary
   };
 }
 

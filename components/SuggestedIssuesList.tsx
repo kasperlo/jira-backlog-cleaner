@@ -19,6 +19,7 @@ import {
     ModalCloseButton,
     ModalBody,
     ModalFooter,
+    Tooltip,
 } from '@chakra-ui/react';
 import { SuggestedIssue, SimilarIssue } from '../types/types';
 import { useJira } from '../context/JiraContext';
@@ -147,12 +148,14 @@ const SuggestedIssuesList: React.FC<SuggestedIssuesListProps> = ({ suggestions, 
                                 >
                                     Create in Jira
                                 </Button>
-                                <Button
-                                    colorScheme="blue"
-                                    onClick={() => fetchSimilarIssues(suggestion)}
-                                >
-                                    Show Similar Issues
-                                </Button>
+                                <Tooltip label="Show most similar issues from project backlog">
+                                    <Button
+                                        colorScheme="blue"
+                                        onClick={() => fetchSimilarIssues(suggestion)}
+                                    >
+                                        Show Similar Issues
+                                    </Button>
+                                </Tooltip>
                             </HStack>
                         </VStack>
                     </ListItem>
@@ -212,8 +215,6 @@ const SuggestedIssuesList: React.FC<SuggestedIssuesListProps> = ({ suggestions, 
                             </>
                         )}
                     </ModalBody>
-
-
                     <ModalFooter>
                         <Button colorScheme="blue" mr={3} onClick={closeModal}>
                             Close

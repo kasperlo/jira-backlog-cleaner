@@ -24,7 +24,6 @@ interface DuplicatesListProps {
     setDuplicates: React.Dispatch<React.SetStateAction<DuplicateGroup[]>>;
     onNotDuplicate: (group: DuplicateGroup) => void;
     onIgnore: (group: DuplicateGroup) => void;
-    actionInProgress: boolean;
 }
 
 export function DuplicatesList({
@@ -32,7 +31,6 @@ export function DuplicatesList({
     setDuplicates,
     onNotDuplicate,
     onIgnore,
-    actionInProgress,
 }: DuplicatesListProps) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [loadingActionSuggestion, setLoadingActionSuggestion] = useState(false);
@@ -40,7 +38,7 @@ export function DuplicatesList({
     const [loadingMergeSuggestion, setLoadingMergeSuggestion] = useState(false);
     const [mergeSuggestion, setMergeSuggestion] = useState<JiraIssue | null>(null);
     const [sortedDuplicates, setSortedDuplicates] = useState<DuplicateGroup[]>([]);
-
+    const [isActionInProgress, setIsActionInProgress] = useState(false);
 
     useEffect(() => {
         const sorted = [...duplicates].sort((a, b) => b.similarityScore - a.similarityScore);
@@ -64,6 +62,61 @@ export function DuplicatesList({
         setCurrentIndex((prev) => (prev < totalPairs - 1 ? prev + 1 : prev));
         setActionSuggestion(null);
         setMergeSuggestion(null);
+    };
+
+    const handleMarkAsDuplicate = async (targetIssueKey: string, sourceIssueKey: string) => {
+        setIsActionInProgress(true);
+        try {
+            if (!config) {
+                toast({
+                    title: 'Jira configuration missing.',
+                    description: 'Please configure your Jira settings first.',
+                    status: 'error',
+                    duration: 5000,
+                    isClosable: true,
+                });
+                return;
+            }
+
+            const response = await axios.post('/api/link-issues', {
+                sourceIssueKey, // The current issue is the source
+                targetIssueKeys: [targetIssueKey], // The duplicate issue is the target
+                config,
+            });
+
+            if (response.status === 200) {
+                if (currentIndex === sortedDuplicates.length - 1) {
+                    goToPrevious();
+                }
+                toast({
+                    title: 'Marked as duplicate successfully.',
+                    description: `Issue ${targetIssueKey} has been marked as a duplicate of ${sourceIssueKey}.`,
+                    status: 'success',
+                    duration: 5000,
+                    isClosable: true,
+                });
+
+                // Remove the duplicate group after successful action
+                setDuplicates((prev) =>
+                    prev.filter(
+                        (group) => !group.group.some((issue) => issue.key === targetIssueKey || issue.key === sourceIssueKey)
+                    )
+                );
+            } else {
+                throw new Error(response.data.error || 'Failed to mark issue as duplicate.');
+            }
+        } catch (error: any) {
+            console.error('Error marking as duplicate:', error);
+            toast({
+                title: 'Failed to mark as duplicate.',
+                description: error.response?.data?.error || 'Please try again later.',
+                status: 'error',
+                duration: 5000,
+                isClosable: true,
+            });
+        } finally {
+            setIsActionInProgress(false);
+        }
     };
 
     const handleGetSuggestion = async () => {
@@ -133,23 +186,26 @@ export function DuplicatesList({
     };
 
     const handleAcceptSuggestion = async () => {
+        setIsActionInProgress(true);
         try {
             // Make DELETE calls for original issues with the 'delete' action
             const deleteResponses = await Promise.allSettled(
-                currentGroup.group.map(issue =>
+                currentGroup.group.map((issue) =>
                     axios.post('/api/delete-issue', {
                         issueKey: issue.key,
                         config,
-                        action: 'delete' // Specify the action here
+                        action: 'delete', // Specify the action here
                     })
                 )
             );
 
             // Check for any failed deletions
-            const failedDeletions = deleteResponses.filter(response => response.status === 'rejected');
+            const failedDeletions = deleteResponses.filter((response) => response.status === 'rejected');
 
             if (failedDeletions.length > 0) {
-                throw new Error('One or more issues could not be deleted. Please check your permissions and try again.');
+                throw new Error(
+                    'One or more issues could not be deleted. Please check your permissions and try again.'
+                );
             }
 
             setDuplicates((prev) => prev.filter((group) => group !== currentGroup));
@@ -174,22 +230,30 @@ export function DuplicatesList({
                 duration: 5000,
                 isClosable: true,
             });
+        } finally {
+            setIsActionInProgress(false);
         }
-
     };
 
     const handleIgnoreSuggestion = () => {
-        setMergeSuggestion(null);
-        toast({
-            title: 'Suggestion Ignored',
-            description: 'The merge suggestion has been ignored.',
-            status: 'info',
-            duration: 3000,
-            isClosable: true,
-        });
+        setIsActionInProgress(true);
+        try {
+            setMergeSuggestion(null);
+            toast({
+                title: 'Suggestion Ignored',
+                description: 'The merge suggestion has been ignored.',
+                status: 'info',
+                duration: 3000,
+                isClosable: true,
+            });
+        } finally {
+            setIsActionInProgress(false);
+        }
     };
 
     const handleDeleteIssue = async (issueKey: string) => {
+        setIsActionInProgress(true);
+
         try {
             if (!config) {
                 toast({
@@ -218,7 +282,7 @@ export function DuplicatesList({
             if (response.status === 200) {
                 // Remove the duplicate pair from duplicates list
                 if (currentIndex === sortedDuplicates.length - 1) {
-                    goToPrevious()
+                    goToPrevious();
                 }
                 setDuplicates((prev) => prev.filter((group) => group !== currentGroup));
                 setMergeSuggestion(null);
@@ -242,10 +306,13 @@ export function DuplicatesList({
                 duration: 3000,
                 isClosable: true,
             });
+        } finally {
+            setIsActionInProgress(false);
         }
     };
 
     const handleMakeSubtask = async (subtaskIssueKey: string, parentIssueKey: string) => {
+        setIsActionInProgress(true);
         try {
             if (!config) {
                 toast({
@@ -270,10 +337,9 @@ export function DuplicatesList({
                 config,
             });
 
-
             // Remove the duplicate pair from duplicates list
             if (currentIndex === sortedDuplicates.length - 1) {
-                goToPrevious()
+                goToPrevious();
             }
             setDuplicates((prev) => prev.filter((group) => group !== currentGroup));
             setMergeSuggestion(null);
@@ -294,6 +360,8 @@ export function DuplicatesList({
                 duration: 3000,
                 isClosable: true,
             });
+        } finally {
+            setIsActionInProgress(false);
         }
     };
 
@@ -337,6 +405,8 @@ export function DuplicatesList({
                             onDelete={handleDeleteIssue}
                             onMakeSubtask={handleMakeSubtask}
                             duplicateIssueKey={duplicateIssueKey}
+                            isActionInProgress={isActionInProgress}
+                            onMarkAsDuplicate={handleMarkAsDuplicate}
                         />
                     );
                 })}
@@ -350,6 +420,7 @@ export function DuplicatesList({
                         isNew={true}
                         onAcceptSuggestion={handleAcceptSuggestion}
                         onIgnoreSuggestion={handleIgnoreSuggestion}
+                        isActionInProgress={isActionInProgress}
                     />
                 ) : null}
             </Flex>
@@ -360,28 +431,24 @@ export function DuplicatesList({
                     <Button
                         colorScheme="blue"
                         onClick={handleGetSuggestion}
-                        isLoading={actionInProgress || loadingActionSuggestion}
+                        isLoading={isActionInProgress || loadingActionSuggestion}
+                        isDisabled={isActionInProgress}
                     >
                         Get Action Suggestion
                     </Button>
                     <Button
                         colorScheme="teal"
                         onClick={handleMergeSuggestion}
-                        isLoading={actionInProgress || loadingMergeSuggestion}
+                        isLoading={isActionInProgress || loadingMergeSuggestion}
+                        isDisabled={isActionInProgress}
                     >
                         Merge Issues
                     </Button>
                     <Button
-                        colorScheme="gray"
-                        onClick={() => onNotDuplicate(currentGroup)}
-                        isLoading={actionInProgress}
-                    >
-                        Mark as Duplicates in Jira
-                    </Button>
-                    <Button
                         variant="outline"
                         onClick={() => onIgnore(currentGroup)}
-                        isLoading={actionInProgress}
+                        isLoading={isActionInProgress}
+                        isDisabled={isActionInProgress}
                     >
                         Ignore Duplicate Pair
                     </Button>
@@ -403,12 +470,7 @@ export function DuplicatesList({
                         {loadingActionSuggestion ? (
                             <IssueListSkeleton itemCount={1} />
                         ) : actionSuggestion ? (
-                            <Box
-                                borderWidth="1px"
-                                borderRadius="md"
-                                p={4}
-                                bg="gray.50"
-                            >
+                            <Box borderWidth="1px" borderRadius="md" p={4} bg="gray.50">
                                 <Text fontWeight="bold">Suggested Action:</Text>
                                 <Text mt={2}>{actionSuggestion}</Text>
                             </Box>
