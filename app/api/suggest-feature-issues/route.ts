@@ -76,8 +76,9 @@ ${feature}
   - "issuetype": The type of issue ("Task", "Story", "Subtask"). Do not include "Epic".
   - "explanation": A brief explanation of why this issue is suggested.
 
-- Return the suggestions strictly in the following JSON array format without any additional text or explanations:
-
+  - Do not include any markdown formatting (e.g., backticks).
+  - Provide the JSON array directly, without additional explanations or headers.
+  
 [
   {
     "summary": "Issue summary",

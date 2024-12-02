@@ -31,7 +31,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
         sm: {
             badgeWidth: '80px',
             height: '25px',
-            fontSize: 'sm',
+            fontSize: 'xs',
             iconSize: 3,
             paddingX: 2,
         },
@@ -76,7 +76,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
             <HStack spacing={1}>
                 <Icon as={icon} boxSize={currentSize.iconSize} />
                 <Text fontSize={currentSize.fontSize} whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis">
-                    {status}
+                    {status.toLowerCase() === "in progress" ? "Ongoing" : status}
                 </Text>
             </HStack>
         </Badge>
