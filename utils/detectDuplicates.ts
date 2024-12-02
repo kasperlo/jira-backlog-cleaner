@@ -25,7 +25,7 @@ export async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise
   const duplicateGroups: DuplicateGroup[] = [];
   const processedPairs = new Set<string>();
   const groupedIssues = new Set<string>(); // Track issues already in a group
-  const SIMILARITY_THRESHOLD = parseFloat(process.env.SIMILARITY_THRESHOLD || '0.5');
+  const SIMILARITY_THRESHOLD = parseFloat(process.env.SIMILARITY_THRESHOLD || '0.75');
 
   // Create a map of issue key to set of duplicate issue keys
   const issueToDuplicateKeys = new Map<string, Set<string>>();

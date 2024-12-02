@@ -52,7 +52,7 @@ const SuggestedIssuesList: React.FC<SuggestedIssuesListProps> = ({ suggestions, 
             }
 
             toast({
-                title: `Issue ${data.issueKey} created successfully.`,
+                title: `Issue ${data.issue.key} created successfully.`,
                 status: 'success',
                 duration: 3000,
                 isClosable: true,
