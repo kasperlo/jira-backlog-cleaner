@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     // Retrieve similar issues from Pinecone (topK=3)
     const similarIssues: JiraIssue[] = await retrieveSimilarIssues(featureEmbedding, 3, config.projectKey);
 
-    const similarityThreshold = parseFloat(process.env.SIMILARITY_THRESHOLD || '0.75');
+    const similarityThreshold = parseFloat(process.env.SIMILARITY_THRESHOLD || '0.6');
     const isSimilar = similarIssues.some((issue) => issue.fields.similarity! >= similarityThreshold);
 
     if (isSimilar) {
