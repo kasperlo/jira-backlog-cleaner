@@ -15,6 +15,7 @@ import {
     AccordionPanel,
     AccordionIcon,
     Stack,
+    Flex,
 } from '@chakra-ui/react';
 import { DeleteIcon } from '@chakra-ui/icons';
 import React, { useState } from 'react';
@@ -36,9 +37,9 @@ interface IssueCardProps {
     onMakeSubtask?: (subtaskIssueKey: string, parentIssueKey: string) => void;
     onMarkAsDuplicate?: (sourceIssueKey: string, targetIssueKey: string) => void;
     duplicateIssueKey?: string;
+    linkTypes?: string[]; // New prop for link types
     isActionInProgress?: boolean;
 }
-
 
 export const IssueCard: React.FC<IssueCardProps> = ({
     issue,
@@ -48,6 +49,7 @@ export const IssueCard: React.FC<IssueCardProps> = ({
     onDelete,
     onMakeSubtask,
     duplicateIssueKey,
+    linkTypes = [], // Default to empty array
     isActionInProgress = false,
     onMarkAsDuplicate,
 }) => {
@@ -73,6 +75,7 @@ export const IssueCard: React.FC<IssueCardProps> = ({
             overflow="hidden"
             display="flex"
             flexDirection="column"
+            position="relative" // To position the link text
         >
             {/* Top Section: Issue Type and Key */}
             <HStack justifyContent="space-between">
@@ -208,49 +211,74 @@ export const IssueCard: React.FC<IssueCardProps> = ({
 
             {/* Action Buttons */}
             {!isNew && (
-                <Box mt={4} alignSelf="flex-end">
-                    <HStack spacing={2}>
-                        {onDelete && (
-                            <Tooltip label="Delete issue">
-                                <IconButton
-                                    icon={<DeleteIcon />}
-                                    aria-label="Delete issue"
-                                    size="sm"
-                                    colorScheme="red"
-                                    onClick={() => onDelete(issue.key)}
-                                    isLoading={isActionInProgress}
-                                    isDisabled={isActionInProgress}
-                                />
-                            </Tooltip>
-                        )}
-                        {duplicateIssueKey && onMakeSubtask && (
-                            <Tooltip label={`Make subtask of ${duplicateIssueKey}`}>
-                                <IconButton
-                                    icon={<TbSubtask />}
-                                    aria-label="Make subtask"
-                                    size="sm"
-                                    colorScheme="blue"
-                                    onClick={() => onMakeSubtask(issue.key, duplicateIssueKey)}
-                                    isLoading={isActionInProgress}
-                                    isDisabled={isActionInProgress}
-                                />
-                            </Tooltip>
-                        )}
+                <Box mt={4}>
+                    <Flex justify="space-between" align="center">
+                        {/* Existing Link Types Display */}
+                        {duplicateIssueKey && linkTypes.length > 0 ?
+                            <VStack align="start" spacing={1}>
+                                <Text fontSize="xs" fontWeight="bold" color="gray.600">
+                                    Existing link in Jira
+                                </Text>
+                                {linkTypes.map((linkType, index) => (
+                                    <Text key={index} fontSize="xs" color="gray.600">
+                                        {`${issue.key} ${linkType} ${duplicateIssueKey}`}
+                                    </Text>
+                                ))}
+                            </VStack>
+                            :
+                            <VStack align="start" spacing={1}>
+                                {linkTypes.map((linkType, index) => (
+                                    <Text key={index} fontSize="xs" color="gray.600">
+                                        {`${issue.key} ${linkType} ${duplicateIssueKey}`}
+                                    </Text>
+                                ))}
+                            </VStack>
+                        }
 
-                        {duplicateIssueKey && onMarkAsDuplicate && (
-                            <Tooltip label={`Mark ${issue.key} as duplicate of ${duplicateIssueKey} in Jira`}>
-                                <IconButton
-                                    icon={<HiOutlineDuplicate />}
-                                    aria-label="Mark as duplicate"
-                                    size="sm"
-                                    colorScheme="green"
-                                    onClick={() => onMarkAsDuplicate(issue.key, duplicateIssueKey)}
-                                    isLoading={isActionInProgress}
-                                    isDisabled={isActionInProgress}
-                                />
-                            </Tooltip>
-                        )}
-                    </HStack>
+                        {/* Action Buttons */}
+                        <HStack spacing={2}>
+                            {onDelete && (
+                                <Tooltip label="Delete issue">
+                                    <IconButton
+                                        icon={<DeleteIcon />}
+                                        aria-label="Delete issue"
+                                        size="sm"
+                                        colorScheme="red"
+                                        onClick={() => onDelete(issue.key)}
+                                        isLoading={isActionInProgress}
+                                        isDisabled={isActionInProgress}
+                                    />
+                                </Tooltip>
+                            )}
+                            {duplicateIssueKey && onMakeSubtask && (
+                                <Tooltip label={`Make subtask of ${duplicateIssueKey}`}>
+                                    <IconButton
+                                        icon={<TbSubtask />}
+                                        aria-label="Make subtask"
+                                        size="sm"
+                                        colorScheme="blue"
+                                        onClick={() => onMakeSubtask(issue.key, duplicateIssueKey)}
+                                        isLoading={isActionInProgress}
+                                        isDisabled={isActionInProgress}
+                                    />
+                                </Tooltip>
+                            )}
+
+                            {duplicateIssueKey && onMarkAsDuplicate && (
+                                <Tooltip label={`Mark ${issue.key} as duplicate of ${duplicateIssueKey} in Jira`}>
+                                    <IconButton
+                                        icon={<HiOutlineDuplicate />}
+                                        aria-label="Mark as duplicate"
+                                        size="sm"
+                                        colorScheme="green"
+                                        onClick={() => onMarkAsDuplicate(issue.key, duplicateIssueKey)}
+                                        isLoading={isActionInProgress}
+                                        isDisabled={isActionInProgress}
+                                    />
+                                </Tooltip>
+                            )}
+                        </HStack>
+                    </Flex>
                 </Box>
             )}
         </Box>

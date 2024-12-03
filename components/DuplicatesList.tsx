@@ -397,6 +397,7 @@ export function DuplicatesList({
                 {currentGroup.group.map((issue, index) => {
                     const otherIssues = currentGroup.group.filter((_, i) => i !== index);
                     const duplicateIssueKey = otherIssues[0]?.key || '';
+                    const linkTypes = currentGroup.linkTypes || []
                     return (
                         <IssueCard
                             key={issue.id}
@@ -406,6 +407,7 @@ export function DuplicatesList({
                             duplicateIssueKey={duplicateIssueKey}
                             isActionInProgress={isActionInProgress}
                             onMarkAsDuplicate={handleMarkAsDuplicate}
+                            linkTypes={linkTypes} // Pass linkTypes
                         />
                     );
                 })}

@@ -1,3 +1,5 @@
+// utils/detectDuplicates.ts
+
 import pinecone from '../lib/pineconeClient';
 import { JiraIssue, DuplicateGroup } from '../types/types';
 import { PINECONE_INDEX_NAME } from '../config';
@@ -38,7 +40,7 @@ export async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise
       for (const link of issue.fields.issuelinks) {
         const linkType = link.type.name.toLowerCase();
 
-        if (linkType.includes('duplicate')) {
+        if (linkType.includes('duplicate') || linkType.includes('clone')) { // Updated to include 'clone'
           if (link.outwardIssue && link.outwardIssue.key) {
             duplicateKeys.add(link.outwardIssue.key);
           }
@@ -51,6 +53,10 @@ export async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise
 
     issueToDuplicateKeys.set(issue.key, duplicateKeys);
   }
+
+  // Create a map for quick issue lookup
+  const issueMap = new Map<string, JiraIssue>();
+  issues.forEach(issue => issueMap.set(issue.key, issue));
 
   for (const issue of issues) {
     // Skip if issue is already part of a duplicate group
@@ -99,22 +105,26 @@ export async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise
         continue;
       }
 
-      // Check if these issues are already linked as duplicates
+      // Check if these issues are already linked as duplicates or clones
       const issueDuplicateKeys = issueToDuplicateKeys.get(issue.key) || new Set();
       if (issueDuplicateKeys.has(matchedIssueKey)) {
-        // They are already linked as duplicates, skip this pair but continue checking others
+        // They are already linked as duplicates or clones, skip this pair but continue checking others
         continue;
       }
 
-      const matchedIssue = issues.find((i) => i.key === matchedIssueKey);
+      const matchedIssue = issueMap.get(matchedIssueKey);
 
       if (matchedIssue) {
+        // Collect existing link types between issue and matchedIssue
+        const existingLinkTypes = getExistingLinkTypes(issue, matchedIssue);
+
         duplicateGroups.push({
           group: [issue, matchedIssue],
           explanation: `Issues '${issue.key}' and '${matchedIssue.key}' are duplicates based on a similarity score of ${match.score!.toFixed(
             2
           )}.`,
           similarityScore: match.score!,
+          linkTypes: existingLinkTypes, // Include link types
         });
 
         // Mark both issues as grouped
@@ -131,4 +141,35 @@ export async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise
   }
 
   return duplicateGroups;
+}
+
+// Helper function to get existing link types between two issues
+function getExistingLinkTypes(issueA: JiraIssue, issueB: JiraIssue): string[] {
+  const linkTypes = new Set<string>();
+
+  // Check links from issueA to issueB
+  if (issueA.fields.issuelinks) {
+    issueA.fields.issuelinks.forEach(link => {
+      if (link.outwardIssue && link.outwardIssue.key === issueB.key) {
+        linkTypes.add(link.type.name);
+      }
+      if (link.inwardIssue && link.inwardIssue.key === issueB.key) {
+        linkTypes.add(link.type.name);
+      }
+    });
+  }
+
+  // Check links from issueB to issueA
+  if (issueB.fields.issuelinks) {
+    issueB.fields.issuelinks.forEach(link => {
+      if (link.outwardIssue && link.outwardIssue.key === issueA.key) {
+        linkTypes.add(link.type.name);
+      }
+      if (link.inwardIssue && link.inwardIssue.key === issueA.key) {
+        linkTypes.add(link.type.name);
+      }
+    });
+  }
+
+  return Array.from(linkTypes);
 }

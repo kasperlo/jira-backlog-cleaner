@@ -1,3 +1,5 @@
+// app/api/detect-duplicates/route.ts
+
 import { NextResponse } from 'next/server';
 import { detectDuplicatesWithPinecone } from '../../../utils/detectDuplicates';
 

@@ -64,6 +64,8 @@ export interface DuplicateGroup {
   group: JiraIssue[];
   explanation: string;
   similarityScore: number;
+  linkTypes?: string[]; 
+
 }
 
 
