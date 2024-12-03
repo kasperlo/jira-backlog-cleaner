@@ -40,7 +40,7 @@ export async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise
       for (const link of issue.fields.issuelinks) {
         const linkType = link.type.name.toLowerCase();
 
-        if (linkType.includes('duplicate') || linkType.includes('clone')) { // Updated to include 'clone'
+        if (linkType.includes('duplicate') || linkType.includes('clone')) {
           if (link.outwardIssue && link.outwardIssue.key) {
             duplicateKeys.add(link.outwardIssue.key);
           }
@@ -108,13 +108,19 @@ export async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise
       // Check if these issues are already linked as duplicates or clones
       const issueDuplicateKeys = issueToDuplicateKeys.get(issue.key) || new Set();
       if (issueDuplicateKeys.has(matchedIssueKey)) {
-        // They are already linked as duplicates or clones, skip this pair but continue checking others
         continue;
       }
 
       const matchedIssue = issueMap.get(matchedIssueKey);
 
       if (matchedIssue) {
+        // Filter out duplicate groups where both issues are "Done"
+        const issueStatus = issue.fields.status?.name.toLowerCase();
+        const matchedIssueStatus = matchedIssue.fields.status?.name.toLowerCase();
+        if (issueStatus === 'done' && matchedIssueStatus === 'done') {
+          continue;
+        }
+
         // Collect existing link types between issue and matchedIssue
         const existingLinkTypes = getExistingLinkTypes(issue, matchedIssue);
 
@@ -124,7 +130,7 @@ export async function detectDuplicatesWithPinecone(issues: JiraIssue[]): Promise
             2
           )}.`,
           similarityScore: match.score!,
-          linkTypes: existingLinkTypes, // Include link types
+          linkTypes: existingLinkTypes,
         });
 
         // Mark both issues as grouped
