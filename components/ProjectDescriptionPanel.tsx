@@ -169,14 +169,14 @@ const ProjectDescriptionPanel: React.FC<ProjectDescriptionPanelProps> = ({
                         {projectDescription}
                     </Text>
                 )}
-                <Button
+                {/* <Button
                     colorScheme="teal"
                     onClick={handleGetIssueSuggestions}
                     isLoading={loadingSuggestions}
                     width="100%"
                 >
                     Get Issue Suggestions
-                </Button>
+                </Button> */}
                 <Button
                     colorScheme="blue"
                     onClick={handleSuggestProjectDescription}
