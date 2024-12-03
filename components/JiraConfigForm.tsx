@@ -53,8 +53,7 @@ const JiraConfigForm = () => {
             !localConfig.jiraEmail ||
             !localConfig.jiraApiToken ||
             !localConfig.jiraBaseUrl ||
-            !localConfig.projectKey ||
-            !localProjectDescription
+            !localConfig.projectKey
         ) {
             setError('All fields are required.');
             return;
@@ -140,7 +139,7 @@ const JiraConfigForm = () => {
                         />
                     </FormControl>
 
-                    <FormControl id="projectDescription" isRequired>
+                    <FormControl id="projectDescription">
                         <FormLabel>Project Description</FormLabel>
                         <Textarea
                             name="projectDescription"
