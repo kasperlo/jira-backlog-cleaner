@@ -463,9 +463,6 @@ export function DuplicatesList({
                 >
                     {/* Action Suggestion */}
                     <Box flex="1">
-                        <Heading size="sm" mb={2}>
-                            Action Suggestion
-                        </Heading>
                         {loadingActionSuggestion ? (
                             <IssueListSkeleton itemCount={1} />
                         ) : actionSuggestion ? (
