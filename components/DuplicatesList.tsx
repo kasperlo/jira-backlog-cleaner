@@ -41,7 +41,10 @@ export function DuplicatesList({
     useEffect(() => {
         const sorted = [...duplicates].sort((a, b) => b.similarityScore - a.similarityScore);
         setSortedDuplicates(sorted);
-    }, [duplicates]);
+        setActionSuggestion(null);
+        setMergeSuggestion(null);
+    }, [duplicates, currentIndex]);
+
 
     const totalPairs = sortedDuplicates.length;
     const currentGroup = sortedDuplicates[currentIndex];
@@ -52,14 +55,10 @@ export function DuplicatesList({
 
     const goToPrevious = () => {
         setCurrentIndex((prev) => (prev > 0 ? prev - 1 : prev));
-        setActionSuggestion(null);
-        setMergeSuggestion(null);
     };
 
     const goToNext = () => {
         setCurrentIndex((prev) => (prev < totalPairs - 1 ? prev + 1 : prev));
-        setActionSuggestion(null);
-        setMergeSuggestion(null);
     };
 
     const handleMarkAsDuplicate = async (targetIssueKey: string, sourceIssueKey: string) => {
@@ -218,7 +217,6 @@ export function DuplicatesList({
             });
 
             // Reset and move to the next duplicate pair
-            setMergeSuggestion(null);
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.error('Error accepting merge suggestion:', error);
@@ -237,7 +235,6 @@ export function DuplicatesList({
     const handleIgnoreSuggestion = () => {
         setIsActionInProgress(true);
         try {
-            setMergeSuggestion(null);
             toast({
                 title: 'Suggestion Ignored',
                 description: 'The merge suggestion has been ignored.',
@@ -284,7 +281,6 @@ export function DuplicatesList({
                     goToPrevious();
                 }
                 setDuplicates((prev) => prev.filter((group) => group !== currentGroup));
-                setMergeSuggestion(null);
                 toast({
                     title: `Issue ${issueKey} and its subtasks deleted successfully.`,
                     status: 'success',
@@ -341,7 +337,6 @@ export function DuplicatesList({
                 goToPrevious();
             }
             setDuplicates((prev) => prev.filter((group) => group !== currentGroup));
-            setMergeSuggestion(null);
 
             toast({
                 title: `Issue ${subtaskIssueKey} has been converted into a subtask of ${parentIssueKey} and the original issue was deleted.`,

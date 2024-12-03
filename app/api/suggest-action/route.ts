@@ -61,20 +61,36 @@ export async function POST(request: Request) {
 }
 
 async function getActionSuggestion(issues: JiraIssue[]): Promise<ActionSuggestion> {
-  const issueSummaries = issues.map(
-    (issue) => `${issue.key}: ${issue.fields.summary}`
-  ).join('\n');
+  // Combine issue details into a detailed summary for each issue
+  const issueDetails = issues.map((issue) => {
+      const summary = issue.fields.summary || 'No summary provided';
+      const description = issue.fields.description || 'No description provided';
+      const issueType = issue.fields.issuetype?.name || 'Unknown type';
+      const status = issue.fields.status?.name || 'Unknown status';
+
+      return `
+Issue Key: ${issue.key}
+Summary: ${summary}
+Description: ${description}
+Type: ${issueType}
+Status: ${status}`;
+  }).join('\n\n');
 
   const prompt = `
-You are a project management assistant. Analyze the following Jira issues for detail, clarity, and completeness based on these Hierarchy Rules:
+You are a project management assistant. Analyze the following Jira issues for detail, clarity, completeness, and relevance based on these Hierarchy Rules and Status Considerations:
 
 ### Hierarchy Rules:
 - **Epics** can have Tasks, Stories, and Bugs as child issues.
 - **Tasks**, **Stories**, and **Bugs** can have Subtasks as child issues.
 - **Subtasks** cannot have child issues.
 
+### Status Considerations:
+- Issues with a **"Done"** status should typically be preserved unless they are redundant or less detailed.
+- Issues in a **"To Do"** or **"In Progress"** status should be evaluated for relevance and alignment with ongoing work.
+- Prefer retaining issues that are in progress or actionable over those that are no longer relevant.
+
 ### Possible Actions:
-1. **Delete One Issue and Keep the Other**: Remove the least descriptive or redundant issue and keep the more descriptive one.
+1. **Delete One Issue and Keep the Other**: Remove the least descriptive or redundant issue and keep the more descriptive one. Specify which issue to keep and which to delete.
 2. **Delete Both Issues and Create a New Issue**: Remove both issues and create a new, better-formulated issue.
 3. **Make One Issue a Subtask of the Other**: Convert one issue into a subtask under the other issue.
 4. **Ignore Issues but Provide Option to Mark as Duplicates in Jira**: Suggest ignoring the duplication but still allow marking them as duplicates in Jira if needed.
@@ -86,33 +102,34 @@ You are a project management assistant. Analyze the following Jira issues for de
 - **New Issue Description**: Provide a detailed description for the new issue if opting for Action 2.
 
 **Important:** 
+- Consider the issue **status** as a critical factor in deciding which action to take. For example, prioritize keeping "Done" issues if they add value or "In Progress" issues if they are still actionable.
 - **Prioritize Actions 1 through 3**. Use **Action 4** only if none of the first three actions are applicable.
 - For **Action 4**, **only** suggest ignoring the issues but inform the user that they can manually mark them as duplicates in Jira.
 
 **Response Guidelines:**
 - When an action is selected, **only** include fields relevant to that action.
-  - **Action 1:** Include \`keepIssueKey\` and \`deleteIssueKey\`.
-  - **Action 2:** Include \`deleteIssueKeys\`, \`createIssueSummary\`, and \`createIssueDescription\`.
-  - **Action 3:** Include \`parentIssueKey\` and \`subtaskIssueKey\`.
-  - **Action 4:** Include \`description\` only.
+- **Action 1:** Include \`keepIssueKey\` and \`deleteIssueKey\`.
+- **Action 2:** Include \`deleteIssueKeys\`, \`createIssueSummary\`, and \`createIssueDescription\`.
+- **Action 3:** Include \`parentIssueKey\` and \`subtaskIssueKey\`.
+- **Action 4:** Include \`description\` only.
 - **Do not include fields not relevant to the selected action.**
 
 Provide your recommendation in **JSON format only** using this structure. **Do not include additional text or explanations.**
 
 {
-  "action": Number, // 1, 2, 3, or 4
-  "description": "Detailed description of the recommended action.", //For all actions
-  "keepIssueKey": "IssueKey1", // Only for Action 1
-  "deleteIssueKey": "IssueKey2", // Only for Action 1
-  "deleteIssueKeys": ["IssueKey1", "IssueKey2"], // Only for Action 2
-  "createIssueSummary": "A new, better-formulated issue summary.", // Only for Action 2
-  "createIssueDescription": "A new, detailed issue description.", // Only for Action 2
-  "parentIssueKey": "IssueKey1", // Only for Action 3
-  "subtaskIssueKey": "IssueKey2" // Only for Action 3
+"action": Number, // 1, 2, 3, or 4
+"description": "Detailed description of the recommended action.", // For all actions
+"keepIssueKey": "IssueKey1", // Only for Action 1
+"deleteIssueKey": "IssueKey2", // Only for Action 1
+"deleteIssueKeys": ["IssueKey1", "IssueKey2"], // Only for Action 2
+"createIssueSummary": "A new, better-formulated issue summary.", // Only for Action 2
+"createIssueDescription": "A new, detailed issue description.", // Only for Action 2
+"parentIssueKey": "IssueKey1", // Only for Action 3
+"subtaskIssueKey": "IssueKey2" // Only for Action 3
 }
 
 ### **Issues:**
-${issueSummaries}
+${issueDetails}
 
 Ensure the JSON is the only output.
 `;
@@ -120,12 +137,12 @@ Ensure the JSON is the only output.
   console.log('Sending prompt to OpenAI:', prompt);
 
   const response = await retryWithExponentialBackoff(() =>
-    openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 500,
-      temperature: 0.5,
-    })
+      openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 500,
+          temperature: 0.5,
+      })
   );
 
   const text = response.choices[0]?.message?.content?.trim();
@@ -139,6 +156,7 @@ Ensure the JSON is the only output.
 
   return suggestion as ActionSuggestion;
 }
+
 
 /**
  * Validates the ActionSuggestion based on the action type.
