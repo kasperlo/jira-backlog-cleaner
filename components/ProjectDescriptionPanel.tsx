@@ -30,7 +30,7 @@ const ProjectDescriptionPanel: React.FC<ProjectDescriptionPanelProps> = ({
     const { projectDescription, setProjectDescription, config } = useJira();
     const [isEditing, setIsEditing] = useState(false);
     const [localDescription, setLocalDescription] = useState(projectDescription);
-    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+    // const [ loadingSuggestions, setLoadingSuggestions] = useState(false);
     const [loadingProjectDescription, setLoadingProjectDescription] = useState(false);
     const [newProjectDescription, setNewProjectDescription] = useState('');
     const toast = useToast();
@@ -47,43 +47,43 @@ const ProjectDescriptionPanel: React.FC<ProjectDescriptionPanelProps> = ({
         setIsEditing(false); // Exit edit mode
     };
 
-    const handleGetIssueSuggestions = async () => {
-        setLoadingSuggestions(true);
-        try {
-            const response = await fetch('/api/suggest-new-issues', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectDescription, config }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to get suggestions.');
-            }
-
-            setSuggestions(data.suggestions);
-            toast({
-                title: 'Suggestions received.',
-                status: 'success',
-                duration: 3000,
-                isClosable: true,
-            });
-        } catch (error: unknown) {
-            console.error('Error getting suggestions:', error);
-            toast({
-                title: 'Error',
-                description:
-                    error instanceof Error ? error.message : 'Failed to get suggestions.',
-                status: 'error',
-                duration: 5000,
-                isClosable: true,
-            });
-        } finally {
-            setLoadingSuggestions(false);
-        }
-    };
-
+    /*  const handleGetIssueSuggestions = async () => {
+         setLoadingSuggestions(true);
+         try {
+             const response = await fetch('/api/suggest-new-issues', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({ projectDescription, config }),
+             });
+ 
+             const data = await response.json();
+ 
+             if (!response.ok) {
+                 throw new Error(data.error || 'Failed to get suggestions.');
+             }
+ 
+             setSuggestions(data.suggestions);
+             toast({
+                 title: 'Suggestions received.',
+                 status: 'success',
+                 duration: 3000,
+                 isClosable: true,
+             });
+         } catch (error: unknown) {
+             console.error('Error getting suggestions:', error);
+             toast({
+                 title: 'Error',
+                 description:
+                     error instanceof Error ? error.message : 'Failed to get suggestions.',
+                 status: 'error',
+                 duration: 5000,
+                 isClosable: true,
+             });
+         } finally {
+             setLoadingSuggestions(false);
+         }
+     };
+  */
     const handleSuggestProjectDescription = async () => {
         setLoadingProjectDescription(true);
         try {
