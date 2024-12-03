@@ -407,7 +407,7 @@ export function DuplicatesList({
                             duplicateIssueKey={duplicateIssueKey}
                             isActionInProgress={isActionInProgress}
                             onMarkAsDuplicate={handleMarkAsDuplicate}
-                            linkTypes={linkTypes} // Pass linkTypes
+                            linkTypes={linkTypes}
                         />
                     );
                 })}

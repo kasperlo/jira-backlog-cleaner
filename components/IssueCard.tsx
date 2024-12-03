@@ -221,7 +221,7 @@ export const IssueCard: React.FC<IssueCardProps> = ({
                                 </Text>
                                 {linkTypes.map((linkType, index) => (
                                     <Text key={index} fontSize="xs" color="gray.600">
-                                        {`${issue.key} ${linkType} ${duplicateIssueKey}`}
+                                        {`${issue.key} ${linkType.toLowerCase()} ${duplicateIssueKey}`}
                                     </Text>
                                 ))}
                             </VStack>
