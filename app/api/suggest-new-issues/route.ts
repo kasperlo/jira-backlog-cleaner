@@ -157,7 +157,7 @@ ${exampleIssuesText}
     const response = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 8000,
+      max_tokens: 5000,
       temperature: 0.5,
     });
 
