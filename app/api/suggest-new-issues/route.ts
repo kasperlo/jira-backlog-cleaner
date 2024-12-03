@@ -43,10 +43,14 @@ function extractJsonFromResponse(responseText: string): string {
 
 export async function POST(request: Request) {
   try {
+    const requestBody = await request.json();
+    console.log('Request Payload:', requestBody);
+
     const { projectDescription, config } = await request.json();
 
     if (!projectDescription || !config) {
       const missingField = !projectDescription ? 'Project description' : 'Jira configuration';
+      console.error(`${missingField} is missing`);
       return NextResponse.json({ error: `${missingField} is required.` }, { status: 400 });
     }
 
@@ -59,11 +63,19 @@ export async function POST(request: Request) {
       })
     );
 
+    console.log('OpenAI Embedding Response:', embeddingResponse);
+
     const queryEmbedding = embeddingResponse.data[0].embedding;
+
+    if (!queryEmbedding) {
+      console.error('Failed to get query embedding from OpenAI');
+      throw new Error('Embedding response is missing data.');
+  }
 
     // Retrieve similar issues from Pinecone (topK=10)
     console.log('Retrieving similar issues using Pinecone...');
     const similarIssues: JiraIssue[] = await retrieveSimilarIssues(queryEmbedding, 10, config.projectKey);
+    console.log('Retrieved Similar Issues:', similarIssues);
 
     const similarityThreshold = 0.1;
     const isRelevant = similarIssues.some((issue) => issue.fields.similarity! >= similarityThreshold);
@@ -71,8 +83,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'The project description does not appear to be correct.' }, { status: 400 });
     }
 
-    const index = pinecone.Index(PINECONE_INDEX_NAME);
-    const stats = await index.describeIndexStats();
+    const index = pinecone.Index(PINECONE_INDEX_NAME || "masterz-3072");
+        const stats = await index.describeIndexStats();
+        console.log('Pinecone Index Stats:', stats);
+        
     const totalExistingIssues = stats.totalRecordCount || 0;
 
     const existingIssuesText = similarIssues
