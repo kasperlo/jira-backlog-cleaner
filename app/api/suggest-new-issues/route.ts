@@ -155,7 +155,7 @@ ${exampleIssuesText}
     console.log('Prompt constructed for OpenAI:', prompt);
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-4',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 8000,
       temperature: 0.5,
